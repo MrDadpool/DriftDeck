@@ -1,0 +1,137 @@
+﻿<Window x:Class="DriftDeck.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DriftDeck"
+        Width="1020" Height="68" MinWidth="960" MinHeight="18" MaxHeight="68"
+        WindowStyle="None" ResizeMode="CanResize"
+        AllowsTransparency="True" Background="Transparent"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI"
+        Topmost="True" ShowInTaskbar="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="0" />
+    </WindowChrome.WindowChrome>
+
+    <Grid x:Name="DockRoot">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="18" />
+            <RowDefinition x:Name="ToolbarRow" Height="Auto" />
+            <RowDefinition x:Name="StatusRow" Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ================= Title strip ================= -->
+        <Border Grid.Row="0" Background="{StaticResource SurfaceTitleBrush}" CornerRadius="7,7,0,0"
+                MouseLeftButtonDown="TitleBar_OnMouseLeftButtonDown">
+            <Grid Margin="10,0,4,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="DriftDeck" FontWeight="Bold" FontSize="{StaticResource TextXs}"
+                               VerticalAlignment="Center" />
+                    <!-- The only accent in this strip: it reports a mode the user can change. -->
+                    <Border x:Name="ModePill" Margin="8,0,0,0" Padding="6,1"
+                            Background="{StaticResource AccentPillBrush}" CornerRadius="7">
+                        <TextBlock x:Name="ModeText" Text="Interactive" Foreground="{StaticResource AccentBrush}"
+                                   FontSize="{StaticResource TextXs}" FontWeight="SemiBold" />
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource GhostButton}" Content="Settings" Height="16"
+                            FontSize="{StaticResource TextXs}" Padding="10,0" Click="SettingsButton_OnClick" />
+                    <Button x:Name="CollapseButton" AutomationProperties.AutomationId="CollapseDockButton"
+                            Style="{StaticResource TitleIconButton}" Content="&#xE921;" Margin="4,0,0,0"
+                            Click="MinimizeButton_OnClick"
+                            ToolTip="Collapse the dock to the bottom-right of this monitor" />
+                    <Button Style="{StaticResource TitleIconButton}" Content="&#xE8BB;" Margin="2,0,0,0"
+                            Click="CloseButton_OnClick" ToolTip="Quit DriftDeck and close every panel" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ================= Toolbar =================
+             Padding is deliberately taller than the strips above and below: this is
+             the only row that does work, and it should read that way. -->
+        <Border x:Name="DockToolbar" Grid.Row="1" Background="{StaticResource SurfaceBaseBrush}" Padding="12,5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="12" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Layout housekeeping: quiet until pointed at. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="LAYOUT" Style="{StaticResource GroupLabel}" Margin="0,0,8,0" />
+                    <ComboBox x:Name="LayoutComboBox" Width="150" IsEditable="True"
+                              ToolTip="Type a name to create a layout, or pick one to load" />
+                    <Button Style="{StaticResource GhostButton}" Content="Load" Margin="6,0,0,0"
+                            Click="LoadLayoutButton_OnClick"
+                            ToolTip="Replace the current panels with the selected layout" />
+                    <Button Style="{StaticResource GhostButton}" Content="Save" Margin="2,0,0,0"
+                            Click="SaveLayoutButton_OnClick"
+                            ToolTip="Save the current panels under this name (Ctrl+S)" />
+                    <Button Style="{StaticResource GhostButton}" Content="Copy" Margin="2,0,0,0"
+                            Click="CopyLayoutButton_OnClick" ToolTip="Duplicate this layout under a new name" />
+                    <Button x:Name="DeleteButton" Style="{StaticResource DangerButton}" Content="Delete" Width="66"
+                            Margin="2,0,0,0" Click="DeleteLayoutButton_OnClick"
+                            ToolTip="Delete the selected layout — asks for a second click to confirm" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <TextBlock Text="SEE-THROUGH" Style="{StaticResource GroupLabel}" Margin="0,0,8,0" />
+                    <Slider x:Name="OverlayTransparencySlider" Width="110" Minimum="0" Maximum="65" Value="2"
+                            AutomationProperties.AutomationId="OverlayTransparencySlider"
+                            AutomationProperties.Name="Overlay see-through"
+                            SmallChange="1" LargeChange="5" ValueChanged="OverlayTransparencySlider_OnValueChanged"
+                            ToolTip="Fades every panel together. Per-panel sliders still apply on top of this." />
+                    <TextBlock x:Name="TransparencyValueText" Text="2%" Width="36" TextAlignment="Right"
+                               Foreground="{StaticResource TextBrush}" FontSize="{StaticResource TextSm}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- The two buttons that make something. The only primaries in the app. -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource AccentButton}" Content="+ Web" Click="AddBrowserButton_OnClick"
+                            ToolTip="New browser panel (Ctrl+B)" />
+                    <Button Style="{StaticResource AccentButton}" Content="+ Notes" Margin="4,0,0,0"
+                            Click="AddNotesButton_OnClick" ToolTip="New notes panel (Ctrl+N)" />
+                    <Button x:Name="ReopenButton" Style="{StaticResource IconButton}" Content="&#xE7A7;"
+                            Margin="4,0,0,0" IsEnabled="False" Click="ReopenPanelButton_OnClick"
+                            ToolTip="Reopen the last closed panel (Ctrl+Shift+T)" />
+                </StackPanel>
+
+                <Button x:Name="PassThroughButton" Grid.Column="4" Content="Pass through" Margin="14,0,0,0"
+                        Click="InteractionButton_OnClick" />
+            </Grid>
+        </Border>
+
+        <!-- ================= Status strip ================= -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceStatusBrush}" CornerRadius="0,0,7,7"
+                Padding="12,0" Height="16">
+            <Grid>
+                <StackPanel x:Name="StatusPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="{StaticResource MutedBrush}"
+                             VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusText" Margin="8,0,0,0" Foreground="{StaticResource MutedBrush}"
+                               FontSize="{StaticResource TextXs}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Text="Standalone desktop window &#183; no game access"
+                           Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- Shown while pass-through is active, so the dock reads as inert. -->
+        <Border x:Name="PassThroughScrim" Grid.RowSpan="3" CornerRadius="{StaticResource FrameRadius}"
+                IsHitTestVisible="False" Background="{StaticResource ScrimBrush}"
+                BorderBrush="{StaticResource WarnBrush}" BorderThickness="1" Opacity="0" />
+    </Grid>
+</Window>
