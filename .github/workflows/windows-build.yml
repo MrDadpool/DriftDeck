@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -42,7 +42,7 @@ jobs:
           }
 
       - name: Upload portable build
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: DriftDeck-win-x64
           path: artifacts/DriftDeck-win-x64.zip
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Download portable build
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: DriftDeck-win-x64
           path: artifacts
