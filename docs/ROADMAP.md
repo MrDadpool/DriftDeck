@@ -2,6 +2,11 @@
 
 This roadmap records intended work, not guarantees or release dates.
 
+## Blocking the first release
+
+- [ ] Smoke-test a build. Everything since v0.2.0 has been compiled but never run.
+- [ ] Tag `v0.3.0`. First execution of the release job, which has only ever reported as skipping.
+
 ## Next priorities
 
 - [ ] Add bottom-edge collapse and restore controls to every browser and notes window.
