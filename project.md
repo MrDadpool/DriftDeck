@@ -2,8 +2,15 @@
 
 ## Current state
 
-The overlay shell has been through a full UX and visual pass. The app builds clean and runs on
-Windows 11 with .NET 10.
+`main` is at version 0.3.0. CI is green with zero compiler warnings and zero workflow warnings.
+
+**Nothing since v0.2.0 has been run.** The three Tier 2 and Tier 3 batches — roughly 2100 lines
+across 22 files — were written on macOS against a `net10.0-windows` WPF target and have only ever
+been compiled, never executed. Compiling is not running. That gap is the reason the release is
+still unpublished, and it is the first thing on the list below.
+
+There are also no published releases and no tags at all, which means the releases page the README
+points at is empty and `UpdateService` has nothing to compare against.
 
 ## Completed
 
@@ -263,12 +270,60 @@ still have left a `DriftDeck.exe.WebView2\` folder next to `DriftDeck.exe`; it i
   now roll at 1 MB to `crash-<date>.<n>.log` — rolling rather than truncating, because the first
   fault of a loop is usually the informative one — and the newest fourteen are kept.
 
+## In progress
+
+Nothing. Three pull requests merged, none open.
+
 ## Next up
 
-- New panel types: checklist, timer, image pin, markdown notes.
-- Bookmarks and recent URLs per layout.
-- Tests for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`,
-  `LayoutBundle`) — owner is handling this.
-- Code signing, once a certificate exists. Azure Trusted Signing is the cheapest route that
-  works from GitHub Actions.
-- Installer or `winget` package, so an available update is not a manual ZIP swap.
+### Blocking the first release
+
+1. **Smoke-test a build.** Owner action; the assistant cannot run WPF. Grab the portable ZIP from
+   the last passing CI run, or `.\scripts\Build-Portable.ps1`. Watch, in order of how likely each
+   is to be wrong:
+   - hide and restore the overlay — `TrySuspendAsync` has a visibility precondition, and
+     collapsing the control to satisfy it is the least certain call in the batch
+   - `Ctrl+Shift+M` against `Ctrl+M`, to confirm WPF input-binding precedence
+   - the dock at its new 990 minimum width, on the smallest display in use
+   - the Settings window with three sections added — it is `SizeToContent="Height"` under a
+     `MaxHeight`, so it should scroll rather than clip
+   - unplug a monitor with panels on it, and resume from sleep
+
+2. **Tag v0.3.0.** Fill the date into `CHANGELOG.md`, then `git tag v0.3.0` and push it. This is
+   the first execution of the `release` job and of `download-artifact@v8`, neither of which has
+   ever run — the job is gated on `refs/tags/v*` and reports as skipping on every build so far.
+   Expect to watch it.
+
+### Features, in the order they are worth doing
+
+3. **Gather every panel onto the current monitor.** Display recovery covers a monitor
+   disappearing; nothing covers a panel dragged somewhere the user cannot find. Reuses the
+   clamping and cascade logic already in `MainWindow`, so it is small.
+
+4. **Notes export and clipboard copy.** Notes live only inside layout JSON. There is no way to get
+   them out, which makes the app a place data goes in and does not leave.
+
+5. **Bookmarks and recent URLs per layout.** Typing an address into an 18-pixel toolbar during a
+   game is the worst interaction left in the product.
+
+6. **Tray panel list.** The tray menu is four fixed items. Listing open panels gives a way to
+   reach one without the dock.
+
+7. **Timer and checklist panel types.** Of the four proposed panel types these are the two that
+   pair with the actual use case — cooldowns and quest steps.
+
+8. **Keyboard accessibility.** Tab traversal across the dock and panels, and
+   `AutomationProperties` on the controls that still lack them.
+
+### Parked, with a reason
+
+- **Tests** for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`,
+  `LayoutBundle`, `QuickLayout`) — owner is handling this. They were written as pure functions
+  precisely so this is cheap.
+- **Code signing**, once a certificate exists. Azure Trusted Signing is the cheapest route that
+  works from GitHub Actions. Note this gates a *good* first release rather than any release:
+  SmartScreen warns on every download until it exists.
+- **Installer or `winget` package**, so an available update is not a manual ZIP swap.
+- **Close with the host application.** Needs an explicit decision on the standing policy that
+  DriftDeck never asks whether a game is running. That is a deliberate change of stance, not a
+  feature to slip in.
