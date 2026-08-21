@@ -27,8 +27,8 @@ Extract `artifacts\DriftDeck-win-x64.zip` into a temporary directory and launch 
 Commit the intended release state, push it to `main`, then create and push a semantic version tag:
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The Windows workflow builds the source, creates the self-contained archive, creates the GitHub Release when needed, and uploads `DriftDeck-win-x64.zip`.
