@@ -185,8 +185,8 @@ The workflow at `.github/workflows/windows-build.yml` builds pull requests and p
 Pushing a version tag creates or updates a GitHub Release:
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 A tagged build stamps the tag into the executable version, so a released build can tell whether a newer release exists. Keep `<Version>` in `src/DriftDeck/DriftDeck.csproj` in step with the tag you intend to publish.
@@ -205,7 +205,8 @@ scripts/Build-Portable.ps1     Reproducible portable publisher
 SC_Overlay.md                  Original product brief
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development expectations, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the window and safety design, and [docs/ROADMAP.md](docs/ROADMAP.md) for planned work.
+See [CHANGELOG.md](CHANGELOG.md) for what changed between releases,
+[CONTRIBUTING.md](CONTRIBUTING.md) for development expectations, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the window and safety design, and [docs/ROADMAP.md](docs/ROADMAP.md) for planned work.
 
 ## License
 
