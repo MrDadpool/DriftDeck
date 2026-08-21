@@ -22,7 +22,9 @@ public partial class PanelHost : UserControl, IDisposable
     private bool _initialized;
     private bool _disposed;
     private double _globalOpacityFactor = 1;
+    private double _dimFactor = 1;
     private bool _suppressAddressUpdate;
+    private bool _suspended;
 
     public PanelDefinition Definition { get; }
 
@@ -33,9 +35,18 @@ public partial class PanelHost : UserControl, IDisposable
     public event EventHandler? PanelChanged;
     public event EventHandler? Activated;
 
+    /// <summary>Asks the owner for a second panel that starts out identical to this one.</summary>
+    public event EventHandler? DuplicateRequested;
+
+    /// <summary>Any deliberate use of this panel, which is what idle dimming resets on.</summary>
+    public event EventHandler? UserInteracted;
+
     public ICommand FocusAddressCommand { get; }
     public ICommand ReloadCommand { get; }
     public ICommand ClosePanelCommand { get; }
+    public ICommand DuplicatePanelCommand { get; }
+    public ICommand ToggleLockCommand { get; }
+    public ICommand ToggleMuteCommand { get; }
 
     public PanelHost(PanelDefinition definition)
     {
@@ -45,12 +56,18 @@ public partial class PanelHost : UserControl, IDisposable
         FocusAddressCommand = new RelayCommand(FocusAddress);
         ReloadCommand = new RelayCommand(Reload);
         ClosePanelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
+        DuplicatePanelCommand = new RelayCommand(() => DuplicateRequested?.Invoke(this, EventArgs.Empty));
+        ToggleLockCommand = new RelayCommand(ToggleLock);
+        ToggleMuteCommand = new RelayCommand(() => SetMuted(!Definition.IsMuted, notify: true));
 
         // InputBindings live outside the visual tree, so they are wired up in code.
         InputBindings.Add(new KeyBinding(FocusAddressCommand, Key.L, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ReloadCommand, Key.R, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ClosePanelCommand, Key.W, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(ToggleShade), Key.M, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(DuplicatePanelCommand, Key.D, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(ToggleLockCommand, Key.L, ModifierKeys.Control | ModifierKeys.Shift));
+        InputBindings.Add(new KeyBinding(ToggleMuteCommand, Key.M, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => ApplyContentScale(Definition.ContentScale + 0.1, true)),
             Key.OemPlus, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => ApplyContentScale(Definition.ContentScale - 0.1, true)),
@@ -66,6 +83,15 @@ public partial class PanelHost : UserControl, IDisposable
         OpacitySlider.Value = Math.Clamp(definition.Opacity, 0.35, 1);
         TitleText.Text = definition.Title;
         ApplyContentScale(Math.Clamp(definition.ContentScale, 0.5, 1.5), false);
+        UpdateLockVisuals();
+        UpdateMuteVisuals();
+
+        // Every pointer and key event in the panel counts as activity, so idle dimming never
+        // fades something the user is working in. Preview events are used because the browser
+        // and the notes box both handle their own input first.
+        PreviewMouseDown += (_, _) => ReportInteraction();
+        PreviewMouseWheel += (_, _) => ReportInteraction();
+        PreviewKeyDown += (_, _) => ReportInteraction();
 
         if (definition.Kind == PanelKind.Browser)
         {
@@ -98,7 +124,7 @@ public partial class PanelHost : UserControl, IDisposable
         Loaded -= BrowserPanel_OnLoaded;
         try
         {
-            await Browser.EnsureCoreWebView2Async();
+            await Browser.EnsureCoreWebView2Async(await BrowserEnvironment.GetAsync());
             var core = Browser.CoreWebView2;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = true;
@@ -112,6 +138,10 @@ public partial class PanelHost : UserControl, IDisposable
             core.DocumentTitleChanged += Core_OnDocumentTitleChanged;
             // Keep pop-ups inside the panel: a bare WebView2 window has no chrome and cannot be closed.
             core.NewWindowRequested += Core_OnNewWindowRequested;
+
+            // Applied before the first navigation, so a muted panel never gets to make a sound.
+            core.IsMuted = Definition.IsMuted;
+            core.IsDocumentPlayingAudioChanged += (_, _) => UpdateMuteVisuals();
 
             Navigate(Definition.Url);
         }
@@ -336,6 +366,14 @@ public partial class PanelHost : UserControl, IDisposable
         }
 
         Activated?.Invoke(this, EventArgs.Empty);
+        if (Definition.IsLocked)
+        {
+            // Raising and selecting still work; only the move is refused, which is the whole
+            // point of the lock.
+            e.Handled = true;
+            return;
+        }
+
         _dragging = true;
         _dragStart = PointToScreen(e.GetPosition(this));
         _startX = panelWindow.Left;
@@ -499,13 +537,233 @@ public partial class PanelHost : UserControl, IDisposable
         ApplyEffectiveOpacity();
     }
 
-    private void ApplyEffectiveOpacity()
+    /// <summary>True while this panel is faded out for having been left alone.</summary>
+    public bool IsDimmed => _dimFactor < 1;
+
+    /// <summary>
+    /// Fades an untouched panel, or brings it back. Kept separate from the per-panel and
+    /// overlay-wide factors so neither is overwritten by a state the user did not choose: the
+    /// slider still reads what they set, and clearing the dim restores exactly that value.
+    /// </summary>
+    public void SetDimmed(bool dimmed, double factor)
+    {
+        var wanted = dimmed ? Math.Clamp(factor, 0.1, 1) : 1;
+        if (Math.Abs(wanted - _dimFactor) < 0.001)
+        {
+            return;
+        }
+
+        _dimFactor = wanted;
+        ApplyEffectiveOpacity(animate: true);
+    }
+
+    private void ApplyEffectiveOpacity(bool animate = false)
+    {
+        if (Window.GetWindow(this) is not PanelWindow panelWindow)
+        {
+            return;
+        }
+
+        var target = Math.Clamp(
+            OpacitySlider.Value * _globalOpacityFactor * _dimFactor, MinEffectiveOpacity, 1);
+
+        if (animate && Motion.Enabled)
+        {
+            // A dim is the one opacity change the user did not ask for at that instant, so it
+            // eases rather than snaps.
+            Motion.Hold(panelWindow, OpacityProperty, target, Motion.Slow);
+            return;
+        }
+
+        // Clears any holding animation first: a held clock outranks a direct assignment, so
+        // without this a dimmed panel would ignore the slider.
+        panelWindow.BeginAnimation(OpacityProperty, null);
+        panelWindow.Opacity = target;
+    }
+
+    // ============================ Activity ============================
+
+    /// <summary>
+    /// Reports deliberate use of this panel. Also clears an active dim immediately, so touching
+    /// a faded panel brings it back without waiting for the next idle tick.
+    /// </summary>
+    public void ReportInteraction()
+    {
+        UserInteracted?.Invoke(this, EventArgs.Empty);
+        if (IsDimmed)
+        {
+            SetDimmed(false, 1);
+        }
+    }
+
+    // ============================ Lock ============================
+
+    private void LockButton_OnClick(object sender, RoutedEventArgs e) => ToggleLock();
+
+    private void ToggleLock() => SetLocked(!Definition.IsLocked, notify: true);
+
+    public void SetLocked(bool locked, bool notify)
     {
         if (Window.GetWindow(this) is PanelWindow panelWindow)
         {
-            panelWindow.Opacity = Math.Clamp(OpacitySlider.Value * _globalOpacityFactor, MinEffectiveOpacity, 1);
+            panelWindow.SetLocked(locked);
+        }
+        else
+        {
+            Definition.IsLocked = locked;
+        }
+
+        // A drag in progress when the lock lands would otherwise keep moving the window.
+        if (locked && _dragging)
+        {
+            _dragging = false;
+            DragSurface.ReleaseMouseCapture();
+            DragSurface.Cursor = Cursors.Arrow;
+        }
+
+        UpdateLockVisuals();
+        if (notify)
+        {
+            PanelChanged?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    private void UpdateLockVisuals()
+    {
+        var locked = Definition.IsLocked;
+        LockButton.Content = locked ? "\uE72E" : "\uE785";
+        LockButton.ToolTip = locked
+            ? "Unlock this panel so it can be moved again (Ctrl+Shift+L)"
+            : "Lock this panel in place (Ctrl+Shift+L)";
+        // Locked is a state the user chose and can undo, so it earns the accent.
+        LockButton.Foreground = (Brush)FindResource(locked ? "AccentBrush" : "MutedBrush");
+        ResizeHint.Visibility = locked || (Window.GetWindow(this) as PanelWindow)?.IsShaded == true
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    // ============================ Mute ============================
+
+    private void MuteButton_OnClick(object sender, RoutedEventArgs e) => SetMuted(!Definition.IsMuted, notify: true);
+
+    /// <summary>
+    /// Silences the page without pausing it, which is what a video kept open beside a game
+    /// actually wants. Notes panels have no audio, so the call is a no-op for them.
+    /// </summary>
+    public void SetMuted(bool muted, bool notify)
+    {
+        if (Definition.Kind != PanelKind.Browser)
+        {
+            return;
+        }
+
+        Definition.IsMuted = muted;
+        if (Browser.CoreWebView2 is not null)
+        {
+            Browser.CoreWebView2.IsMuted = muted;
+        }
+
+        UpdateMuteVisuals();
+        if (notify)
+        {
+            PanelChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void UpdateMuteVisuals()
+    {
+        if (Definition.Kind != PanelKind.Browser)
+        {
+            return;
+        }
+
+        var muted = Definition.IsMuted;
+        MuteButton.Content = muted ? "\uE74F" : "\uE767";
+        MuteButton.ToolTip = muted
+            ? "Unmute this panel (Ctrl+Shift+M)"
+            : "Mute this panel's audio (Ctrl+Shift+M)";
+
+        // Muted is a chosen state; audible-but-unmuted is worth a quieter hint so a panel making
+        // noise off-screen can be found.
+        var playing = Browser.CoreWebView2?.IsDocumentPlayingAudio == true;
+        MuteButton.Foreground = (Brush)FindResource(
+            muted ? "WarnBrush" : playing ? "AccentBrush" : "MutedBrush");
+    }
+
+    // ============================ Suspend ============================
+
+    /// <summary>
+    /// Stops a hidden browser panel from doing work. Hiding the overlay hides the windows but
+    /// leaves every WebView2 rendering, decoding video, and running page timers — spending GPU
+    /// and CPU during precisely the moment the user hid the overlay to get them back.
+    /// <para>
+    /// A panel whose page is audibly playing and is not muted is left alone: music kept running
+    /// behind a game is a reason to hide the overlay, not a reason to silence it.
+    /// </para>
+    /// </summary>
+    public async Task SuspendContentAsync()
+    {
+        var core = Browser.CoreWebView2;
+        if (Definition.Kind != PanelKind.Browser || core is null || _suspended || _disposed)
+        {
+            return;
+        }
+
+        if (core.IsDocumentPlayingAudio && !Definition.IsMuted)
+        {
+            return;
+        }
+
+        // WebView2 refuses to suspend while its content is visible, so the control is collapsed
+        // first. The window is already hidden by this point, so nothing flickers.
+        Browser.Visibility = Visibility.Collapsed;
+        try
+        {
+            _suspended = await core.TrySuspendAsync();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+        {
+            _suspended = false;
+        }
+
+        if (!_suspended)
+        {
+            Browser.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>
+    /// Wakes a suspended panel. Called before the window is shown, so the page is already
+    /// running by the time it is on screen.
+    /// </summary>
+    public void ResumeContent()
+    {
+        if (Definition.Kind != PanelKind.Browser || _disposed)
+        {
+            return;
+        }
+
+        if (_suspended)
+        {
+            try
+            {
+                Browser.CoreWebView2?.Resume();
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+            {
+                // A resume that fails leaves a blank panel, which reloading fixes.
+            }
+
+            _suspended = false;
+        }
+
+        Browser.Visibility = Visibility.Visible;
+    }
+
+    // ============================ Duplicate ============================
+
+    private void DuplicateButton_OnClick(object sender, RoutedEventArgs e) =>
+        DuplicateRequested?.Invoke(this, EventArgs.Empty);
 
     private void NotesBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
@@ -606,6 +864,8 @@ public partial class PanelHost : UserControl, IDisposable
         ShadeButton.Content = shaded ? "\uE70D" : "\uE70E";
         ShadeButton.ToolTip = shaded ? "Roll back down (Ctrl+M)" : "Roll up to the title bar (Ctrl+M)";
         OuterBorder.CornerRadius = new CornerRadius(shaded ? 6 : 7);
+        // Re-applied last: a locked panel must not get its resize hint back on un-rolling.
+        UpdateLockVisuals();
     }
 
     private void ZoomOutButton_OnClick(object sender, RoutedEventArgs e) =>

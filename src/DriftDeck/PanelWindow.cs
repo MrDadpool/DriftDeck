@@ -72,6 +72,9 @@ public sealed class PanelWindow : Window
         host.VerticalAlignment = VerticalAlignment.Stretch;
 
         SourceInitialized += OnSourceInitialized;
+        // A monitor change can move a window to a different scale factor, which invalidates
+        // the pixel geometry the layout stored for it.
+        DpiChanged += (_, _) => ClampIntoView();
         // Clicking web content or the notes box activates the window; that is the real "raise me" signal.
         Activated += (_, _) => UserActivated?.Invoke(this, EventArgs.Empty);
         SizeChanged += (_, _) => Host.NotifyGeometryChanged();
@@ -90,6 +93,8 @@ public sealed class PanelWindow : Window
         {
             SetShaded(true, animate: false);
         }
+
+        ApplyLock();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -130,18 +135,36 @@ public sealed class PanelWindow : Window
             }
 
             MinHeight = ShadedHeight;
-            ResizeMode = ResizeMode.NoResize;
             AnimateHeight(ShadedHeight, animate);
         }
         else
         {
             MinHeight = _unshadedMinHeight;
-            ResizeMode = ResizeMode.CanResize;
             AnimateHeight(Math.Max(_unshadedMinHeight, Definition.RestoreHeight), animate);
         }
 
+        ApplyLock();
         Host.SetShaded(shaded);
     }
+
+    // ============================ Lock ============================
+
+    /// <summary>
+    /// Pins or releases the panel. A locked panel keeps every other control — scale, opacity,
+    /// roll-up, close — because the accident being prevented is a stray drag, not interaction.
+    /// </summary>
+    public void SetLocked(bool locked)
+    {
+        Definition.IsLocked = locked;
+        ApplyLock();
+    }
+
+    /// <summary>
+    /// Resizing is taken away by the window itself rather than only by the drag handler, so the
+    /// chrome's own resize border stops offering a grip that would be refused.
+    /// </summary>
+    private void ApplyLock() =>
+        ResizeMode = IsShaded || Definition.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResize;
 
     private void AnimateHeight(double target, bool animate)
     {
@@ -178,7 +201,7 @@ public sealed class PanelWindow : Window
     /// </summary>
     private nint WindowProcedure(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
-        if (message != WmSizing || Snap.IsFreeMove || IsShaded)
+        if (message != WmSizing || Snap.IsFreeMove || IsShaded || Definition.IsLocked)
         {
             return nint.Zero;
         }
@@ -259,6 +282,22 @@ public sealed class PanelWindow : Window
     }
 
     public void SetClickThrough(bool enabled) => _windowService?.SetClickThrough(enabled);
+
+    /// <summary>
+    /// Pulls the panel back onto a monitor that still exists after the display set changed.
+    /// The layout keeps whatever size it asked for where the new work area allows it, so a
+    /// monitor coming back does not permanently shrink panels that were on it.
+    /// </summary>
+    public void ReclampForDisplayChange()
+    {
+        Width = Math.Max(MinWidth, Definition.Width);
+        if (!IsShaded)
+        {
+            Height = Math.Max(MinHeight, Definition.Height);
+        }
+
+        ClampIntoView();
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect

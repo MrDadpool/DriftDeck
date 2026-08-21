@@ -25,10 +25,15 @@ This roadmap records intended work, not guarantees or release dates.
 
 ## Later work
 
-- [ ] First-launch onboarding for hotkeys, compatibility, and the safety boundary.
-- [ ] Display-aware recovery when a saved monitor is disconnected or its DPI changes.
+- [x] First-launch onboarding for hotkeys, compatibility, and the safety boundary.
+- [x] Display-aware recovery when a saved monitor is disconnected or its DPI changes.
+- [x] Panel duplication.
 - [ ] Keyboard accessibility and visible focus improvements.
-- [ ] Panel duplication.
 - [ ] Automated tests for layout persistence, panel geometry, and hotkey parsing.
 - [ ] Optional code signing for published Windows builds.
+- [ ] Installer or `winget` package, so an available update is not a manual ZIP swap.
+- [ ] Bookmarks and recent URLs per layout.
+- [ ] Timer and checklist panel types.
+- [ ] A command to gather every panel onto the current monitor, for a panel dragged out of reach.
+- [ ] Notes export and clipboard copy, so notes are not trapped inside layout JSON.
 

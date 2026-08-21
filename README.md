@@ -10,7 +10,9 @@ DriftDeck does not read game memory or files, hook rendering, inject code, autom
 - Multi-monitor placement, including monitors with negative desktop coordinates
 - Interactive and native click-through modes
 - Composition-hosted WebView2 content, so opacity and pass-through apply to the full browser panel
-- Per-panel opacity and 50-150% content scaling
+- Per-panel opacity, 50-150% content scaling, per-panel mute, and a panel lock
+- Panel duplication, so a tuned panel does not have to be rebuilt by hand
+- Optional idle dimming for panels you have not touched
 - Overlay-wide panel transparency control
 - Compact panel title bars with drag, resize, zoom, opacity, and close controls
 - Named layouts with automatic save and last-layout restore
@@ -18,9 +20,13 @@ DriftDeck does not read game memory or files, hook rendering, inject code, autom
 - First-run tour covering pass-through, the global shortcuts, and the first panels
 - Recovery notice and a local crash log when a session ends unexpectedly
 - Optional startup check for a newer GitHub release
-- Layout copy and confirmed deletion
+- Layout copy, confirmed deletion, and export or import of every layout as one file
+- Automatic recovery when a monitor is disconnected, rescaled, or the machine resumes
+- A plain warning when an application is in exclusive fullscreen, instead of an invisible overlay
 - Configurable global hotkeys with reserved-shortcut validation and rollback
-- Start-hidden preference and a single-instance launcher
+- Optional start with Windows, a start-hidden preference, and a single-instance launcher
+- `Ctrl+Alt+1` to `Ctrl+Alt+9` load layouts without leaving the application underneath
+- Browser panels pause while the overlay is hidden, so nothing renders behind a game
 - Transparent workspace: only the dock and floating panels are rendered
 - Collapsible dock that shrinks to the bottom-right of the current monitor instead of the taskbar
 
@@ -35,13 +41,15 @@ Start DriftDeck and use the compact dock to add browser or notes panels. Every p
 - Use `-` and `+` in the title bar to change content scale.
 - Use the title-bar slider to change that panel's opacity.
 - Use `x` to close it.
-- Browser panels accept HTTP and HTTPS addresses and can open the current address in the default browser.
+- The copy button duplicates the panel; the padlock locks it in place so a stray drag cannot move or resize it.
+- Browser panels accept HTTP and HTTPS addresses, can be muted individually, and can open the current address in the default browser.
 
 ### Dock
 
 - `+ WEB` creates a browser panel.
 - `+ NOTES` creates a notes panel.
 - `SEE-THROUGH` changes all panel windows, including their content.
+- The speaker button mutes or unmutes every browser panel at once.
 - `_` collapses the dock to a 250 x 21 strip at the bottom-right of its current monitor.
 - `□` restores a collapsed dock to its exact previous position and size.
 - Closing the dock exits DriftDeck and closes all panels.
@@ -57,11 +65,64 @@ The default shortcuts are:
 | Toggle interactive/pass-through | `Ctrl+Alt+O` |
 | Hide/restore the complete overlay | `Ctrl+Alt+H` |
 
+Panel and dock shortcuts, active while DriftDeck has focus:
+
+| Action | Shortcut |
+| --- | --- |
+| Duplicate the focused panel | `Ctrl+D` |
+| Lock or unlock the focused panel | `Ctrl+Shift+L` |
+| Mute or unmute the focused browser panel | `Ctrl+Shift+M` |
+| Mute or unmute every browser panel | `Ctrl+Shift+A` |
+
+Quick-layout shortcuts are global like the two above, and are assigned under `SETTINGS`:
+
+| Action | Shortcut |
+| --- | --- |
+| Load the layout assigned to a digit | `Ctrl+Alt+1` … `Ctrl+Alt+9` |
+
 Shortcuts are configurable under `SETTINGS`. Saved settings from an existing installation may contain different shortcuts. DriftDeck rejects common Windows-reserved combinations such as `Alt+Space`.
 
 ### Layouts
 
 A layout stores dock geometry, panel types, desktop coordinates, sizes, URLs, notes, opacity, and content scale. Use the editable layout selector with `LOAD`, `SAVE`, `COPY`, and `DEL`.
+
+### Quick layouts
+
+Per-application rules cover switching that should happen by itself. Quick layouts cover the other
+half: deciding you want a different workspace right now. Assign up to nine layouts to
+`Ctrl+Alt+1` through `Ctrl+Alt+9` under `SETTINGS`, and they load without clicking the dock —
+which matters because clicking the dock means taking focus off a fullscreen application.
+
+A digit another program already owns is reported in the status strip on the next launch rather
+than failing quietly, so it can be reassigned. Loading a layout this way pauses automatic
+switching until you move to a different application, exactly as the `LOAD` button does.
+
+### Start with Windows
+
+`SETTINGS` can register DriftDeck to start when you sign in. It is a per-user entry, appears in
+Task Manager's Startup tab so it can also be disabled from there, and never needs elevation.
+Moving or renaming the DriftDeck folder is handled: the entry is repointed at the new location on
+the next launch instead of silently launching nothing.
+
+### Panels that stay out of the way
+
+Two optional behaviours under `SETTINGS`, both off or plainly explained rather than assumed:
+
+- **Idle dimming** fades panels you have not touched for a while, so a reference page left open stops competing for attention. The panel you are working in and any panel the pointer is resting over never fade. Off by default; the delay and how far a panel fades are both configurable.
+- **Locking** a panel refuses moves and resizes while leaving everything else — scale, opacity, roll-up, close — available. Locks are saved with the layout.
+- **Pausing hidden panels** stops browser panels rendering, decoding video, and running page timers while the overlay is hidden, so nothing is spending graphics and processor time you hid the overlay to reclaim. On by default. A panel that is audibly playing and not muted is left running, and the whole behaviour can be turned off for a page that has to hold a live connection open.
+
+### Displays that change
+
+Layouts store desktop coordinates, so undocking a laptop, switching a second monitor off, a DPI change, or a driver reset can leave a panel parked where no display reaches. DriftDeck listens for those events and pulls the dock and every panel back into a real work area, then saves, so the next launch does not restore the unreachable position. The status strip says how many panels were moved.
+
+### Exclusive fullscreen
+
+Exclusive fullscreen is the one mode no ordinary desktop overlay can appear over. Rather than looking broken, DriftDeck says so in the status strip and the tray and suggests borderless mode. It asks Windows a single question about the desktop's own presentation state — the same question a notification asks before it appears — and never which application is responsible. Turn the notice off under `SETTINGS`.
+
+### Exporting and importing layouts
+
+`SETTINGS` can write every saved layout to one `.driftdeck` file and read one back. An imported layout whose name is already taken is added as `Name (imported)` rather than written over yours. Use it to back a workspace up, move it to another machine, or hand it to someone else.
 
 ### Per-application layouts
 
@@ -75,20 +136,20 @@ Matching uses only the foreground window's process name and title, which Windows
 
 ### Recovery and crash logs
 
-DriftDeck writes the current layout within about 650 ms of every change, so an interrupted session loses nothing. If a run ends without quitting — most often because the game it was sitting over was killed with it — the next launch says so in the status strip and keeps a report in `%LOCALAPPDATA%\DriftDeck\logs`. `SETTINGS` has a button to open that folder. Nothing is sent anywhere.
+DriftDeck writes the current layout within about 650 ms of every change, so an interrupted session loses nothing. If a run ends without quitting — most often because the game it was sitting over was killed with it — the next launch says so in the status strip and keeps a report in `%LOCALAPPDATA%\DriftDeck\logs`. `SETTINGS` has a button to open that folder. Logs are capped at 1 MB per file and the newest fourteen files are kept, so a repeated fault cannot fill the disk. Nothing is sent anywhere.
 
 ### Updates
 
 DriftDeck can ask GitHub for the latest published release when it starts, and says so in the status strip and the tray if a newer one exists. The request is anonymous and carries nothing about you or the applications you run; turn it off under `SETTINGS`. Because DriftDeck ships as a portable folder, updating means downloading the new ZIP — nothing installs or replaces itself.
 
-Layouts and settings are stored under `%LOCALAPPDATA%\DriftDeck`. WebView2 manages browser cookies and credentials separately; DriftDeck does not write them into layout JSON files.
+Layouts and settings are stored under `%LOCALAPPDATA%\DriftDeck`. Browser panels share one WebView2 profile under `%LOCALAPPDATA%\DriftDeck\webview2`, so a sign-in in one panel is available in the next and several panels cost far less memory than one browser process each. WebView2 manages those cookies and credentials itself; DriftDeck does not write them into layout JSON files.
 
 ## Compatibility and limitations
 
 - Releases are not code-signed. Windows SmartScreen will warn the first time you run `DriftDeck.exe`; choose **More info**, then **Run anyway**. Download only from the [releases page](https://github.com/MrDadpool/DriftDeck/releases).
 - Windows 10 version 2004 (build 19041) or later is required.
 - Borderless-windowed mode is recommended for games.
-- Exclusive fullscreen may prevent ordinary desktop overlays from appearing.
+- Exclusive fullscreen may prevent ordinary desktop overlays from appearing. DriftDeck detects this and says so rather than failing silently.
 - Microsoft Edge WebView2 Runtime is required and is normally present on supported Windows systems.
 - Website playback, sign-in, autoplay, and DRM support depend on the provider and WebView2 policies.
 - DriftDeck does not guarantee compatibility with every game, graphics driver, HDR configuration, or third-party overlay.

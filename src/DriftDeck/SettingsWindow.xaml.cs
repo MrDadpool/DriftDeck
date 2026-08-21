@@ -16,21 +16,44 @@ public partial class SettingsWindow : Window
 
     private readonly AppSettings _original;
     private readonly ObservableCollection<LayoutRule> _rules = [];
+
+    /// <summary>
+    /// Observable so an import can make the new layouts pickable at once. A plain list bound
+    /// one-way raises nothing when it is replaced, and the rule rows would keep offering the
+    /// old names until Settings was closed and reopened.
+    /// </summary>
+    private readonly ObservableCollection<string> _layoutNames = [];
+    private readonly ObservableCollection<QuickLayout> _quickLayouts = [];
     private readonly ForegroundWatcher _foreground = new();
+    private readonly LayoutStore _layoutStore = new();
     private readonly string _logDirectory;
     private DispatcherTimer? _captureTimer;
     private int _captureSecondsLeft;
 
     public AppSettings? ResultSettings { get; private set; }
 
+    /// <summary>
+    /// True once an import has written layouts. Import touches disk immediately rather than on
+    /// Save, so the caller has to refresh its layout list even if the dialog is then cancelled.
+    /// </summary>
+    public bool LayoutsChanged { get; private set; }
+
     /// <summary>Layout names offered by every rule row's picker.</summary>
-    public IReadOnlyList<string> LayoutNames { get; }
+    public IReadOnlyList<string> LayoutNames => _layoutNames;
+
+    /// <summary>Digits a quick-layout row may claim.</summary>
+    public IReadOnlyList<int> SlotOptions { get; } =
+        Enumerable.Range(QuickLayout.MinSlot, QuickLayout.MaxSlot - QuickLayout.MinSlot + 1).ToList();
 
     public SettingsWindow(AppSettings settings, IReadOnlyList<string> layoutNames, string logDirectory)
     {
         _original = settings;
-        LayoutNames = layoutNames;
         _logDirectory = logDirectory;
+        foreach (var name in layoutNames)
+        {
+            _layoutNames.Add(name);
+        }
+
         InitializeComponent();
 
         InteractionHotkeyBox.Text = settings.InteractionHotkey;
@@ -38,6 +61,16 @@ public partial class SettingsWindow : Window
         StartHiddenCheckBox.IsChecked = settings.StartHidden;
         AutoSwitchCheckBox.IsChecked = settings.AutoSwitchLayouts;
         CheckForUpdatesCheckBox.IsChecked = settings.CheckForUpdates;
+        IdleDimCheckBox.IsChecked = settings.IdleDimEnabled;
+        IdleDimSecondsBox.Text = settings.ClampedIdleDimSeconds.ToString();
+        IdleDimPercentBox.Text = Math.Clamp(settings.IdleDimPercent,
+            AppSettings.MinIdleDimPercent, AppSettings.MaxIdleDimPercent).ToString();
+        FullscreenWarningCheckBox.IsChecked = settings.WarnOnExclusiveFullscreen;
+        SuspendHiddenCheckBox.IsChecked = settings.SuspendHiddenPanels;
+
+        // The registry is the truth here, not a copy in settings.json: the user can turn this
+        // off from Task Manager, and a stored duplicate would then disagree with reality.
+        RunAtLoginCheckBox.IsChecked = StartupRegistration.IsEnabled;
         UpdateStatusText.Text = $"Version {UpdateService.CurrentVersion.ToString(3)}";
 
         // Edited copies, so cancelling leaves the running configuration untouched.
@@ -52,14 +85,55 @@ public partial class SettingsWindow : Window
             });
         }
 
+        foreach (var quick in settings.QuickLayouts)
+        {
+            _quickLayouts.Add(new QuickLayout { Slot = quick.Slot, LayoutName = quick.LayoutName });
+        }
+
         RulesList.ItemsSource = _rules;
+        QuickLayoutsList.ItemsSource = _quickLayouts;
         _rules.CollectionChanged += (_, _) => UpdateRulesPlaceholder();
+        _quickLayouts.CollectionChanged += (_, _) => UpdateQuickLayoutsPlaceholder();
         UpdateRulesPlaceholder();
+        UpdateQuickLayoutsPlaceholder();
         Closed += (_, _) => CleanUp();
     }
 
     private void UpdateRulesPlaceholder() =>
         NoRulesText.Visibility = _rules.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void UpdateQuickLayoutsPlaceholder()
+    {
+        NoQuickLayoutsText.Visibility = _quickLayouts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        AddQuickLayoutButton.IsEnabled = _quickLayouts.Count < QuickLayout.MaxSlot;
+    }
+
+    // ============================ Quick layouts ============================
+
+    private void AddQuickLayoutButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var slot = QuickLayout.NextFreeSlot(_quickLayouts);
+        if (slot is null)
+        {
+            ValidationText.Text = "All nine digits are already assigned.";
+            return;
+        }
+
+        ValidationText.Text = string.Empty;
+        _quickLayouts.Add(new QuickLayout
+        {
+            Slot = slot.Value,
+            LayoutName = LayoutNames.FirstOrDefault() ?? "Default"
+        });
+    }
+
+    private void RemoveQuickLayoutButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: QuickLayout quick })
+        {
+            _quickLayouts.Remove(quick);
+        }
+    }
 
     // ============================ Shortcuts ============================
 
@@ -245,6 +319,89 @@ public partial class SettingsWindow : Window
         }
     }
 
+    // ============================ Layout files ============================
+
+    private async void ExportLayoutsButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export DriftDeck layouts",
+            FileName = $"DriftDeck layouts{LayoutBundle.FileExtension}",
+            DefaultExt = LayoutBundle.FileExtension,
+            Filter = $"DriftDeck layouts (*{LayoutBundle.FileExtension})|*{LayoutBundle.FileExtension}",
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        ExportLayoutsButton.IsEnabled = false;
+        try
+        {
+            var count = await LayoutBundleStore.ExportAsync(_layoutStore, dialog.FileName);
+            LayoutFileStatusText.Text = count == 0
+                ? "There were no saved layouts to export."
+                : $"Exported {count} layout{(count == 1 ? "" : "s")}.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            LayoutFileStatusText.Text = $"Export failed: {exception.Message}";
+        }
+        finally
+        {
+            ExportLayoutsButton.IsEnabled = true;
+        }
+    }
+
+    private async void ImportLayoutsButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import DriftDeck layouts",
+            DefaultExt = LayoutBundle.FileExtension,
+            Filter = $"DriftDeck layouts (*{LayoutBundle.FileExtension})|*{LayoutBundle.FileExtension}" +
+                     "|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        ImportLayoutsButton.IsEnabled = false;
+        try
+        {
+            var result = await LayoutBundleStore.ImportAsync(_layoutStore, dialog.FileName);
+            if (result.Failed)
+            {
+                LayoutFileStatusText.Text = result.Error;
+                return;
+            }
+
+            LayoutsChanged |= result.Added > 0;
+            LayoutFileStatusText.Text = result.Renamed == 0
+                ? $"Imported {result.Added} layout{(result.Added == 1 ? "" : "s")}."
+                : $"Imported {result.Added}, renaming {result.Renamed} that already existed.";
+
+            // Rule rows pick from this list, so a freshly imported layout has to become
+            // selectable without closing and reopening Settings.
+            _layoutNames.Clear();
+            foreach (var name in _layoutStore.ListNames())
+            {
+                _layoutNames.Add(name);
+            }
+        }
+        finally
+        {
+            ImportLayoutsButton.IsEnabled = true;
+        }
+    }
+
     // ============================ Commit ============================
 
     private void SaveButton_OnClick(object sender, RoutedEventArgs e)
@@ -275,6 +432,32 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        // Two rows on one digit means the second registration is refused and the row reads as
+        // working. Say so rather than saving a shortcut that does nothing.
+        var duplicateSlot = _quickLayouts
+            .GroupBy(quick => quick.Slot)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateSlot is not null)
+        {
+            ValidationText.Text = $"Ctrl+Alt+{duplicateSlot.Key} is assigned twice. Give each digit one layout.";
+            return;
+        }
+
+        if (_quickLayouts.Any(quick => string.IsNullOrWhiteSpace(quick.LayoutName)))
+        {
+            ValidationText.Text = "Every quick layout shortcut needs a layout. Remove the empty row or fill it in.";
+            return;
+        }
+
+        // Applied before the dialog closes so the checkbox always reflects what was written,
+        // and reported inline because a refused registry write must not read as success.
+        var startupError = StartupRegistration.Apply(RunAtLoginCheckBox.IsChecked == true);
+        if (startupError is not null)
+        {
+            ValidationText.Text = $"Start with Windows could not be changed: {startupError}";
+            return;
+        }
+
         ResultSettings = new AppSettings
         {
             InteractionHotkey = interactionGesture.ToString(),
@@ -284,6 +467,22 @@ public partial class SettingsWindow : Window
             DismissedUpdateTag = _original.DismissedUpdateTag,
             AutoSwitchLayouts = AutoSwitchCheckBox.IsChecked == true,
             CheckForUpdates = CheckForUpdatesCheckBox.IsChecked == true,
+            IdleDimEnabled = IdleDimCheckBox.IsChecked == true,
+            IdleDimSeconds = ParseBounded(IdleDimSecondsBox.Text, Defaults.IdleDimSeconds,
+                AppSettings.MinIdleDimSeconds, AppSettings.MaxIdleDimSeconds),
+            IdleDimPercent = ParseBounded(IdleDimPercentBox.Text, Defaults.IdleDimPercent,
+                AppSettings.MinIdleDimPercent, AppSettings.MaxIdleDimPercent),
+            WarnOnExclusiveFullscreen = FullscreenWarningCheckBox.IsChecked == true,
+            SuspendHiddenPanels = SuspendHiddenCheckBox.IsChecked == true,
+            QuickLayouts = _quickLayouts
+                .Where(quick => quick.IsValidSlot)
+                .Select(quick => new QuickLayout
+                {
+                    Slot = quick.Slot,
+                    LayoutName = LayoutStore.NormalizeName(quick.LayoutName)
+                })
+                .OrderBy(quick => quick.Slot)
+                .ToList(),
             LayoutRules = _rules
                 .Select(rule => new LayoutRule
                 {
@@ -296,6 +495,13 @@ public partial class SettingsWindow : Window
         };
         DialogResult = true;
     }
+
+    /// <summary>
+    /// Out-of-range or unreadable input falls back to the default rather than refusing to save.
+    /// These two boxes are comfort settings; a typo in one should not block a shortcut change.
+    /// </summary>
+    private static int ParseBounded(string text, int fallback, int minimum, int maximum) =>
+        int.TryParse(text.Trim(), out var value) ? Math.Clamp(value, minimum, maximum) : fallback;
 
     private void CancelButton_OnClick(object sender, RoutedEventArgs e) => DialogResult = false;
 

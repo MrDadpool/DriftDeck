@@ -48,6 +48,39 @@ public sealed class PanelDefinition
     /// <summary>Height to return to when the panel is un-rolled.</summary>
     public double RestoreHeight { get; set; } = 390;
 
+    /// <summary>Browser panels only. Silences page audio without pausing it.</summary>
+    public bool IsMuted { get; set; }
+
+    /// <summary>
+    /// Refuses moves and resizes. An overlay lives under the pointer during a game, and a panel
+    /// nudged by an accidental drag mid-fight is worse than one that cannot be nudged at all.
+    /// </summary>
+    public bool IsLocked { get; set; }
+
+    /// <summary>
+    /// A copy of this panel, ready to be added to the layout. Identity is deliberately not
+    /// carried over: a duplicate is a new panel that happens to start out identical.
+    /// </summary>
+    public PanelDefinition Clone() => new()
+    {
+        Id = Guid.NewGuid(),
+        Kind = Kind,
+        Title = Title,
+        HasCustomTitle = HasCustomTitle,
+        Url = Url,
+        Notes = Notes,
+        X = X,
+        Y = Y,
+        Width = Width,
+        Height = Height,
+        Opacity = Opacity,
+        ContentScale = ContentScale,
+        IsCollapsed = IsCollapsed,
+        RestoreHeight = RestoreHeight,
+        IsMuted = IsMuted,
+        IsLocked = false
+    };
+
     public static PanelDefinition CreateBrowser(double x, double y) => new()
     {
         Kind = PanelKind.Browser,
