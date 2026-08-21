@@ -2,7 +2,11 @@
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
-    [switch]$FrameworkDependent
+    [switch]$FrameworkDependent,
+
+    # Overrides the version compiled into the executable. Release builds pass the tag here so
+    # the running build reports the same version the update check compares against.
+    [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +39,10 @@ $publishArguments = @(
     '-p:DebugType=None',
     '-p:DebugSymbols=false'
 )
+
+if ($Version) {
+    $publishArguments += "-p:Version=$($Version.TrimStart('v'))"
+}
 
 if ($FrameworkDependent) {
     $publishArguments += @('--self-contained', 'false')

@@ -32,7 +32,14 @@ jobs:
 
       - name: Create portable Windows build
         shell: pwsh
-        run: .\scripts\Build-Portable.ps1
+        run: |
+          # Tag builds stamp their version into the executable, so a released build can tell
+          # whether a newer release exists. Untagged builds keep the csproj version.
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            .\scripts\Build-Portable.ps1 -Version "${{ github.ref_name }}"
+          } else {
+            .\scripts\Build-Portable.ps1
+          }
 
       - name: Upload portable build
         uses: actions/upload-artifact@v4

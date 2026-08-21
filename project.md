@@ -42,6 +42,39 @@ Windows 11 with .NET 10.
   Toggle by the title-bar chevron, `Ctrl+M`, or double-clicking the title bar. State persists via
   `PanelDefinition.IsCollapsed` / `RestoreHeight`.
 
+### Per-application layouts, onboarding, recovery, updates (Tier 1)
+
+- **Per-application layouts.** `Services/ForegroundWatcher.cs` polls the foreground window once
+  a second and reports the owning process name and window title. It is deliberately the weakest
+  mechanism that answers "which application is the user looking at": `GetForegroundWindow`,
+  `GetWindowThreadProcessId`, and `GetWindowText`, the same read-only calls the taskbar makes.
+  Polling was chosen over `SetWinEventHook` because it needs no cross-process callback and still
+  catches title changes, which a foreground-only hook misses.
+  `Models/LayoutRule.cs` holds the matching as pure functions, so it is testable without a
+  window: a rule matches an executable name, optionally narrowed by a title substring, and
+  title-qualified rules outrank bare process rules regardless of list order.
+  A match waits 1.2 s and is re-checked before the layout loads, so tabbing past a window does
+  not load its layout, and loading a layout by hand suppresses switching until the user moves to
+  a different application.
+- **First-run tour.** `OnboardingWindow` covers what DriftDeck is, the two global shortcuts, and
+  the first panels. A transparent overlay whose only chrome is a thin dock cannot explain
+  pass-through by being looked at, and a global shortcut is undiscoverable by clicking. Skipping
+  counts as completing it: re-showing it every launch would punish dismissal, and Settings says
+  everything it says.
+- **Crash recovery.** `Services/SessionSentinel.cs` writes a marker on start and clears it on a
+  deliberate exit, so the next launch can tell "the user quit" from "the process died" — an
+  overlay usually dies with the game it sits over. The layout was already durable at ~650 ms per
+  change, so this is not about restoring data: it reports what happened and writes the fault to
+  `%LOCALAPPDATA%\DriftDeck\logs`. Faults are logged and then allowed through; swallowing one
+  would leave an always-on-top window alive in an unknown state over whatever the user is doing.
+- **Update check.** `Services/UpdateService.cs` makes one anonymous GET of the public GitHub
+  release list per launch and reports a newer tag in the status strip and the tray. It never
+  installs anything — DriftDeck is a portable folder, so replacing itself is not on the table.
+  Release builds stamp the tag into the assembly version (`Build-Portable.ps1 -Version`, wired
+  into CI) so a published build can compare against it.
+- **Not signed.** Releases carry no Authenticode signature, so SmartScreen warns on first run.
+  This is documented in the README rather than worked around.
+
 ### Window ordering
 
 Every DriftDeck window is topmost, so Windows ordered them among themselves by activation alone
@@ -139,4 +172,10 @@ redistributing the folder.
 
 ## Next up
 
-- Nothing outstanding.
+- New panel types: checklist, timer, image pin, markdown notes.
+- Bookmarks and recent URLs per layout.
+- Idle dim for untouched panels.
+- Layout export and import as a shareable file.
+- Tests for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`).
+- Code signing, once a certificate exists. Azure Trusted Signing is the cheapest route that
+  works from GitHub Actions.

@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>DriftDeck</AssemblyName>
+    <Version>0.2.0</Version>
     <RootNamespace>DriftDeck</RootNamespace>
     <Authors>DriftDeck contributors</Authors>
     <Copyright>Copyright (c) 2026 DriftDeck contributors</Copyright>

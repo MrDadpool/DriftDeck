@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private readonly List<PanelHost> _panelHosts = [];
     private readonly List<PanelWindow> _panelWindows = [];
     private readonly Stack<PanelDefinition> _closedPanels = new();
+    private readonly ForegroundWatcher _foreground = new();
+    private readonly DispatcherTimer _autoSwitchTimer;
 
     private OverlayLayout _layout = OverlayLayout.CreateDefault();
     private AppSettings _settings;
@@ -43,6 +45,16 @@ public partial class MainWindow : Window
     private double _expandedDockLeft;
     private double _expandedDockTop;
     private double _expandedDockWidth = 1020;
+
+    /// <summary>Rule waiting out the settle delay before its layout is loaded.</summary>
+    private LayoutRule? _pendingRule;
+
+    /// <summary>
+    /// Process the user last loaded a layout for by hand. Automatic switching stays out of the
+    /// way until they move to a different application, so a deliberate choice is never undone
+    /// a second later by a rule.
+    /// </summary>
+    private string _manualOverrideProcess = string.Empty;
 
     public ICommand AddBrowserCommand { get; }
     public ICommand AddNotesCommand { get; }
@@ -71,6 +83,11 @@ public partial class MainWindow : Window
 
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
         _saveTimer.Tick += SaveTimer_OnTick;
+        // A short settle delay, so alt-tabbing through applications does not load three layouts.
+        _autoSwitchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+        _autoSwitchTimer.Tick += AutoSwitchTimer_OnTick;
+        _foreground.Changed += Foreground_OnChanged;
+
         _deleteArmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _deleteArmTimer.Tick += (_, _) => DisarmDelete();
 
@@ -168,6 +185,15 @@ public partial class MainWindow : Window
         _initializing = false;
         SetStatus(IdleStatus(), StatusKind.Info);
 
+        if (!_settings.HasSeenOnboarding)
+        {
+            await RunOnboardingAsync();
+        }
+
+        ApplyAutoSwitchSetting();
+        ReportPreviousCrash();
+        _ = CheckForUpdatesAsync();
+
         if (_settings.StartHidden)
         {
             _ = Dispatcher.BeginInvoke(() =>
@@ -177,6 +203,166 @@ public partial class MainWindow : Window
                     $"The overlay started hidden. Press {_settings.VisibilityHotkey} or double-click this icon to show it.");
             }, DispatcherPriority.ContextIdle);
         }
+    }
+
+    /// <summary>
+    /// First launch only. The dock alone cannot explain pass-through or the global shortcuts,
+    /// and both are invisible until someone says they exist.
+    /// </summary>
+    private async Task RunOnboardingAsync()
+    {
+        var tour = new OnboardingWindow(_settings) { Owner = this };
+        var completed = tour.ShowDialog() == true;
+
+        _settings.HasSeenOnboarding = true;
+        if (completed)
+        {
+            _settings.AutoSwitchLayouts = tour.EnableAutoSwitch;
+            if (tour.CreateBrowserPanel)
+            {
+                AddPanel(PanelKind.Browser);
+            }
+
+            if (tour.CreateNotesPanel)
+            {
+                AddPanel(PanelKind.Notes);
+            }
+        }
+
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (IOException)
+        {
+            // The tour would simply run once more. Not worth an error message on first launch.
+        }
+    }
+
+    /// <summary>
+    /// Says out loud that the last run was killed rather than closed. An overlay usually dies
+    /// with the game it was sitting over, and silently carrying on hides that a crash log exists.
+    /// </summary>
+    private void ReportPreviousCrash()
+    {
+        var sentinel = App.Sentinel;
+        if (sentinel is null || !sentinel.PreviousRunCrashed)
+        {
+            return;
+        }
+
+        var when = sentinel.PreviousRunEndedAt is { } endedAt
+            ? $" from {endedAt:t}"
+            : string.Empty;
+        SetStatus($"The previous session ended unexpectedly. Your layout{when} was restored. " +
+                  "Settings can open the crash log folder.", StatusKind.Warning);
+    }
+
+    /// <summary>
+    /// One anonymous request to the public release list, and only ever a notice: DriftDeck is a
+    /// portable folder with no installer, so it must not replace itself behind the user's back.
+    /// </summary>
+    private async Task CheckForUpdatesAsync()
+    {
+        if (!_settings.CheckForUpdates)
+        {
+            return;
+        }
+
+        using var updates = new UpdateService();
+        var update = await updates.CheckAsync();
+        if (update is null || update.Tag == _settings.DismissedUpdateTag)
+        {
+            return;
+        }
+
+        _settings.DismissedUpdateTag = update.Tag;
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (IOException)
+        {
+            // Worst case the same version is announced again next launch.
+        }
+
+        SetStatus($"DriftDeck {update.Tag} is available. Settings has the download link.", StatusKind.Info);
+        _tray?.ShowHint("DriftDeck update available",
+            $"{update.Tag} has been published. Open Settings to download it.");
+    }
+
+    // ============================ Per-application layouts ============================
+
+    /// <summary>Starts or stops foreground watching to match the current settings.</summary>
+    private void ApplyAutoSwitchSetting()
+    {
+        var wanted = _settings.AutoSwitchLayouts && _settings.LayoutRules.Count > 0;
+        if (wanted == _foreground.IsRunning)
+        {
+            return;
+        }
+
+        if (wanted)
+        {
+            _foreground.Start();
+        }
+        else
+        {
+            _foreground.Stop();
+            _autoSwitchTimer.Stop();
+            _pendingRule = null;
+        }
+    }
+
+    private void Foreground_OnChanged(object? sender, ForegroundApp app)
+    {
+        // Moving to a different application clears the hold a manual load put on switching.
+        if (!app.ProcessName.Equals(_manualOverrideProcess, StringComparison.OrdinalIgnoreCase))
+        {
+            _manualOverrideProcess = string.Empty;
+        }
+
+        var rule = LayoutRule.FirstMatch(_settings.LayoutRules, app.ProcessName, app.WindowTitle);
+        if (rule is null
+            || !string.IsNullOrEmpty(_manualOverrideProcess)
+            || LayoutStore.NormalizeName(rule.LayoutName).Equals(_layout.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            _autoSwitchTimer.Stop();
+            _pendingRule = null;
+            return;
+        }
+
+        _pendingRule = rule;
+        _autoSwitchTimer.Stop();
+        _autoSwitchTimer.Start();
+    }
+
+    private async void AutoSwitchTimer_OnTick(object? sender, EventArgs e)
+    {
+        _autoSwitchTimer.Stop();
+        var rule = _pendingRule;
+        _pendingRule = null;
+        if (rule is null)
+        {
+            return;
+        }
+
+        // Confirm the application is still in front, so a layout never loads for a window the
+        // user has already tabbed away from.
+        var app = _foreground.Current();
+        if (app.IsEmpty || !rule.Matches(app.ProcessName, app.WindowTitle))
+        {
+            return;
+        }
+
+        var target = LayoutStore.NormalizeName(rule.LayoutName);
+        if (target.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await SwitchLayoutAsync(target);
+        SetStatus($"Loaded '{_layout.Name}' for {app.ProcessName} - {_panelHosts.Count} panels", StatusKind.Success);
     }
 
     private string IdleStatus() =>
@@ -569,16 +755,35 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Loading by hand outranks the rules: automatic switching is paused for this
+        // application until the user moves to a different one.
+        _manualOverrideProcess = _foreground.Current().ProcessName;
+        _autoSwitchTimer.Stop();
+        _pendingRule = null;
+
+        await SwitchLayoutAsync(requested);
+        SetStatus($"Loaded ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
+    }
+
+    /// <summary>
+    /// Replaces the live panels with a stored layout, saving the current one first. Shared by the
+    /// Load button and by rule-driven switching so both paths behave identically.
+    /// </summary>
+    private async Task SwitchLayoutAsync(string name)
+    {
         await SaveCurrentLayoutAsync(false);
         _initializing = true;
-        _layout = await _layoutStore.LoadAsync(requested);
+        _layout = await _layoutStore.LoadAsync(name);
         ApplyWindowLayout(_layout);
         LayoutComboBox.Text = _layout.Name;
         LoadPanelHosts();
         _closedPanels.Clear();
         ReopenButton.IsEnabled = false;
         _initializing = false;
-        SetStatus($"Loaded ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
+
+        // Records which layout is now current. Without this the "last layout" pointer still
+        // names the one we just left, and the next launch would restore the wrong workspace.
+        await SaveCurrentLayoutAsync(false);
     }
 
     private void SaveLayoutButton_OnClick(object sender, RoutedEventArgs e) => _ = SaveNamedLayoutAsync();
@@ -692,7 +897,11 @@ public partial class MainWindow : Window
 
     private async void OpenSettings()
     {
-        var dialog = new SettingsWindow(_settings) { Owner = IsVisible ? this : null };
+        var dialog = new SettingsWindow(_settings, _layoutStore.ListNames(),
+            App.Sentinel?.LogDirectory ?? string.Empty)
+        {
+            Owner = IsVisible ? this : null
+        };
         if (dialog.ShowDialog() != true || dialog.ResultSettings is null)
         {
             return;
@@ -704,6 +913,7 @@ public partial class MainWindow : Window
         {
             _hotkeys = CreateHotkeyService(dialog.ResultSettings);
             _settings = dialog.ResultSettings;
+            ApplyAutoSwitchSetting();
             await _settingsStore.SaveAsync(_settings);
             SetStatus($"Settings saved · {_settings.InteractionHotkey} pass-through · {_settings.VisibilityHotkey} hide",
                 StatusKind.Success);
@@ -712,6 +922,7 @@ public partial class MainWindow : Window
         {
             _hotkeys?.Dispose();
             _settings = previousSettings;
+            ApplyAutoSwitchSetting();
             try
             {
                 _hotkeys = CreateHotkeyService(previousSettings);
@@ -851,6 +1062,8 @@ public partial class MainWindow : Window
         _shuttingDown = true;
         _saveTimer.Stop();
         _deleteArmTimer.Stop();
+        _autoSwitchTimer.Stop();
+        _foreground.Dispose();
         await SaveCurrentLayoutAsync(false);
 
         foreach (var host in _panelHosts)

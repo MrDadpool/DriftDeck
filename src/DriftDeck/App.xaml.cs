@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Threading;
+using DriftDeck.Services;
 
 namespace DriftDeck;
 
@@ -10,6 +12,12 @@ public partial class App : Application
     internal static readonly uint ShowOverlayMessage = RegisterWindowMessage("DriftDeck.ShowOverlay");
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
+
+    /// <summary>
+    /// Tracks whether this run ended cleanly and owns the crash log. Created before any window,
+    /// because a fault during startup is exactly the one worth recording.
+    /// </summary>
+    internal static SessionSentinel? Sentinel { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -27,8 +35,28 @@ public partial class App : Application
             return;
         }
 
+        Sentinel = new SessionSentinel();
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+
         ApplyMotionPreference();
         base.OnStartup(e);
+    }
+
+    /// <summary>
+    /// Records the fault and lets it through. Swallowing it would leave an always-on-top window
+    /// alive in an unknown state above whatever the user is doing, which is worse than a crash
+    /// they can see; the layout on disk is already current, so nothing is lost by going down.
+    /// </summary>
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e) =>
+        Sentinel?.WriteCrashReport(e.Exception, "Dispatcher");
+
+    private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception exception)
+        {
+            Sentinel?.WriteCrashReport(exception, "AppDomain");
+        }
     }
 
     /// <summary>
@@ -51,6 +79,10 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Reached only on a deliberate shutdown, which is precisely what the marker records.
+        Sentinel?.Dispose();
+        Sentinel = null;
+
         if (_ownsSingleInstanceMutex)
         {
             _singleInstanceMutex?.ReleaseMutex();
