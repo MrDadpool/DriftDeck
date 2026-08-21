@@ -58,7 +58,12 @@
                                Text="Click a shortcut box and press the keys. Windows-reserved combinations are refused." />
                     <TextBlock x:Name="ValidationText" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}"
                                FontSize="{StaticResource TextXs}" TextWrapping="Wrap" />
-                    <CheckBox x:Name="StartHiddenCheckBox" Margin="0,18,0,0"
+                    <CheckBox x:Name="RunAtLoginCheckBox" Margin="0,18,0,0"
+                              Content="Start DriftDeck when I sign in to Windows" />
+                    <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                               FontSize="{StaticResource TextXs}" LineHeight="17"
+                               Text="Registered for this user only, and listed in Task Manager's Startup tab so it can be turned off from there too. Moving the DriftDeck folder is handled: the entry is repointed on the next launch." />
+                    <CheckBox x:Name="StartHiddenCheckBox" Margin="0,12,0,0"
                               Content="Start with the overlay hidden — a tray icon brings it back" />
                 </StackPanel>
 
@@ -134,6 +139,132 @@
                                     ToolTip="Click, then click the application you want a rule for. It is captured after 4 seconds." />
                             <TextBlock x:Name="CaptureStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
                                        Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ================= Quick layouts ================= -->
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
+                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <StackPanel>
+                        <TextBlock Text="QUICK LAYOUTS" Style="{StaticResource GroupLabel}"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="Load a layout without touching the dock. Rules handle switching that should happen by itself; this is for deciding you want a different workspace right now, which otherwise means clicking the dock and taking focus off a fullscreen application. A digit another program already owns is reported on the next launch rather than failing quietly." />
+
+                        <Grid Margin="0,14,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="SHORTCUT" Style="{StaticResource GroupLabel}" />
+                            <TextBlock Grid.Column="1" Text="LAYOUT" Style="{StaticResource GroupLabel}" />
+                        </Grid>
+
+                        <ItemsControl x:Name="QuickLayoutsList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:QuickLayout}">
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
+                                            <TextBlock Text="Ctrl+Alt+" VerticalAlignment="Center"
+                                                       FontSize="{StaticResource TextSm}" />
+                                            <ComboBox Width="52" Margin="4,0,0,0"
+                                                      ItemsSource="{Binding SlotOptions,
+                                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      SelectedItem="{Binding Slot}"
+                                                      ToolTip="Digit to press, 1 to 9" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" IsEditable="True"
+                                                  ItemsSource="{Binding LayoutNames,
+                                                      RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding LayoutName, UpdateSourceTrigger=PropertyChanged}"
+                                                  ToolTip="Layout this shortcut loads" />
+                                        <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;"
+                                                Margin="6,0,0,0" Click="RemoveQuickLayoutButton_OnClick"
+                                                ToolTip="Remove this shortcut" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock x:Name="NoQuickLayoutsText" Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}"
+                                   Text="No shortcuts yet. Add one to reach a layout from inside a game." />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button x:Name="AddQuickLayoutButton" Style="{StaticResource GhostButton}"
+                                    Content="Add shortcut" Width="120" Click="AddQuickLayoutButton_OnClick" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ================= Panels ================= -->
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
+                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <StackPanel>
+                        <TextBlock Text="PANELS" Style="{StaticResource GroupLabel}"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <CheckBox x:Name="IdleDimCheckBox" Margin="0,10,0,0"
+                                  Content="Fade panels I have not touched for a while" />
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="A panel you left open stops competing for attention until you go back to it. The panel you are working in and any panel the pointer is resting over never fade." />
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <TextBlock Text="Fade after" VerticalAlignment="Center"
+                                       FontSize="{StaticResource TextSm}" />
+                            <TextBox x:Name="IdleDimSecondsBox" Width="64" Margin="8,0,0,0"
+                                     AutomationProperties.AutomationId="IdleDimSecondsBox"
+                                     ToolTip="Seconds of no use before a panel fades" />
+                            <TextBlock Text="seconds, down to" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       FontSize="{StaticResource TextSm}" />
+                            <TextBox x:Name="IdleDimPercentBox" Width="64" Margin="8,0,0,0"
+                                     AutomationProperties.AutomationId="IdleDimPercentBox"
+                                     ToolTip="How visible a faded panel stays, as a percentage of its normal opacity" />
+                            <TextBlock Text="% of normal" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       FontSize="{StaticResource TextSm}" />
+                        </StackPanel>
+                        <CheckBox x:Name="SuspendHiddenCheckBox" Margin="0,16,0,0"
+                                  Content="Pause browser panels while the overlay is hidden" />
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="A hidden panel otherwise keeps rendering, decoding video, and running page timers, spending the graphics and processor time you hid it to get back. A panel that is audibly playing and not muted is left running. Turn this off if a page has to hold a live connection open." />
+                        <CheckBox x:Name="FullscreenWarningCheckBox" Margin="0,16,0,0"
+                                  Content="Tell me when an application is in exclusive fullscreen" />
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="Exclusive fullscreen is the one mode no ordinary desktop overlay can appear over, so DriftDeck says so instead of looking broken. It asks Windows whether the desktop is being presented exclusively — the same question a notification asks — and never which application is doing it." />
+                    </StackPanel>
+                </Border>
+
+                <!-- ================= Layout files ================= -->
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
+                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <StackPanel>
+                        <TextBlock Text="LAYOUT FILES" Style="{StaticResource GroupLabel}"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="Every saved layout in one file, so a workspace can be backed up, carried to another machine, or handed to someone else. An imported layout whose name is already taken is added alongside yours, never over it." />
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button x:Name="ExportLayoutsButton" Style="{StaticResource GhostButton}"
+                                    Content="Export all layouts" Width="160" Click="ExportLayoutsButton_OnClick" />
+                            <Button x:Name="ImportLayoutsButton" Style="{StaticResource GhostButton}"
+                                    Content="Import layouts" Width="140" Margin="6,0,0,0"
+                                    Click="ImportLayoutsButton_OnClick" />
+                            <TextBlock x:Name="LayoutFileStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="230" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

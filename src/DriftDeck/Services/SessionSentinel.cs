@@ -15,6 +15,16 @@ namespace DriftDeck.Services;
 /// </summary>
 public sealed class SessionSentinel : IDisposable
 {
+    /// <summary>
+    /// A crash loop appends to the same file every few seconds, so the log needs a ceiling as
+    /// well as a count: one runaway session must not be able to fill the user's disk with a
+    /// courtesy feature.
+    /// </summary>
+    private const long MaxLogBytes = 1024 * 1024;
+
+    /// <summary>Roughly two weeks of daily logs. Older ones have outlived their usefulness.</summary>
+    private const int MaxLogFiles = 14;
+
     private readonly string _markerPath;
     private readonly string _logDirectory;
     private bool _disposed;
@@ -57,7 +67,7 @@ public sealed class SessionSentinel : IDisposable
         try
         {
             Directory.CreateDirectory(_logDirectory);
-            var path = Path.Combine(_logDirectory, $"crash-{DateTime.Now:yyyy-MM-dd}.log");
+            var path = NextLogPath();
             var report = $"""
 
                 ===== {DateTime.Now:O} =====
@@ -68,11 +78,53 @@ public sealed class SessionSentinel : IDisposable
 
                 """;
             File.AppendAllText(path, report);
+            PruneOldLogs();
             return path;
         }
         catch (Exception logFailure) when (logFailure is IOException or UnauthorizedAccessException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Today's log, rolled to <c>crash-&lt;date&gt;.2.log</c> and upward once it passes the size
+    /// ceiling, so an oversized file is capped rather than truncated — the first fault of a
+    /// crash loop is usually the informative one and must not be overwritten by the hundredth.
+    /// </summary>
+    private string NextLogPath()
+    {
+        var stem = $"crash-{DateTime.Now:yyyy-MM-dd}";
+        var path = Path.Combine(_logDirectory, $"{stem}.log");
+        var part = 2;
+        while (File.Exists(path) && new FileInfo(path).Length >= MaxLogBytes)
+        {
+            path = Path.Combine(_logDirectory, $"{stem}.{part++}.log");
+        }
+
+        return path;
+    }
+
+    /// <summary>Keeps the newest files and deletes the rest. Failures are not worth reporting.</summary>
+    private void PruneOldLogs()
+    {
+        try
+        {
+            var stale = new DirectoryInfo(_logDirectory)
+                .GetFiles("crash-*.log")
+                .OrderByDescending(file => file.LastWriteTimeUtc)
+                .Skip(MaxLogFiles)
+                .ToList();
+
+            foreach (var file in stale)
+            {
+                file.Delete();
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                             or DirectoryNotFoundException)
+        {
+            // The log is a courtesy; tidying it is a courtesy to that courtesy.
         }
     }
 

@@ -152,6 +152,11 @@ makes a compact UI unusable rather than dense.
 | Focus address bar | `Ctrl+L` |
 | Reload page | `Ctrl+R` |
 | Close panel | `Ctrl+W` |
+| Duplicate panel | `Ctrl+D` |
+| Lock / unlock panel | `Ctrl+Shift+L` |
+| Mute / unmute panel | `Ctrl+Shift+M` |
+| Mute / unmute every browser panel | `Ctrl+Shift+A` |
+| Load quick layout 1-9 | `Ctrl+Alt+1` … `Ctrl+Alt+9` (configurable) |
 | Content scale | `Ctrl+±` |
 | Back / forward | `Alt+←` / `Alt+→` |
 | Free placement while dragging | hold `Alt` |
@@ -166,16 +171,104 @@ scripts\Build-Portable.ps1 -Configuration Release
 
 `bin\` and `obj\` regenerate on the next build. All three are covered by `.gitignore`.
 
-If a run of the portable exe leaves a `DriftDeck.exe.WebView2\` folder beside it, that is
-per-user browser profile data created at runtime, not part of the build. Delete it before
-redistributing the folder.
+Browser profile data no longer lands beside the executable: `Services/BrowserEnvironment.cs`
+pins the WebView2 user-data folder to `%LOCALAPPDATA%\DriftDeck\webview2`. An older build may
+still have left a `DriftDeck.exe.WebView2\` folder next to `DriftDeck.exe`; it is safe to delete.
+
+### Exclusive fullscreen, display recovery, shared browser profile, panel comfort (Tier 2)
+
+- **Exclusive-fullscreen notice.** `Services/FullscreenProbe.cs` polls
+  `SHQueryUserNotificationState` every two seconds and reports the one transition that matters:
+  a Direct3D application presenting exclusively, which no ordinary topmost window can be drawn
+  over. It is the same shell question Windows itself asks before showing a toast — it names no
+  process, opens no handle, and installs no hook — so it stays inside the safety policy while
+  turning "the overlay is broken" into "switch that game to borderless". Reported once per
+  transition in the status strip and the tray; switchable off under Settings.
+
+- **Display recovery.** `Services/DisplayWatcher.cs` subscribes to `DisplaySettingsChanged`,
+  `PowerModeChanged` (resume only), and `SessionSwitch` (unlock, console connect), debounced by
+  600 ms because a docking change arrives as one notification per monitor and a resolution change
+  as several in a row. `PanelWindow` also handles `DpiChanged`. On each settled change the dock
+  and every panel are re-clamped into a real work area and the layout is saved — the save is the
+  point, since without it the next launch restores the coordinates just found to be unreachable.
+  `SystemEvents` holds a process-wide static subscription list and fires on its own thread, so
+  handlers marshal to the dispatcher and are removed on dispose.
+
+- **One shared WebView2 environment.** Each panel previously called a bare
+  `EnsureCoreWebView2Async()`, which let WebView2 pick its own defaults: a profile folder created
+  next to the executable (so a *portable* folder grew state at runtime) and no sharing between
+  panels. `Services/BrowserEnvironment.cs` creates one environment, gated by a semaphore because
+  panels load concurrently, rooted at `%LOCALAPPDATA%\DriftDeck\webview2`. Panels now share
+  logins and cookies and reuse browser processes instead of one group per panel.
+
+- **Idle dimming.** Off by default, because an always-on-top window changing its own opacity
+  unasked is startling. One shared dispatcher tick drives every panel rather than a timer each.
+  Two exemptions carry the feature: the active panel, and any panel the pointer is over — browser
+  content lives in a composition surface and raises no WPF mouse events, so `Services/CursorProbe.cs`
+  asks Windows where the cursor is instead, otherwise a page being read would fade out from under
+  the reader. The dim is a third multiplier in `PanelHost.ApplyEffectiveOpacity`, so it never
+  overwrites the per-panel or overlay-wide values; clearing it restores exactly what the user set.
+  Animated dims use `Motion.Hold`, and direct assignments clear the clock first — a holding
+  animation outranks a property set, so without that a dimmed panel would ignore its own slider.
+
+- **Panel lock.** `PanelDefinition.IsLocked` refuses drags and takes resizing away at the window
+  level, so the chrome stops offering a grip that would be refused. Everything else stays
+  available: the accident being prevented is a stray drag during a game, not interaction.
+
+- **Panel duplication and mute.** `PanelDefinition.Clone()` deliberately does not carry the id or
+  the lock. Mute uses `CoreWebView2.IsMuted`, which silences without pausing — the right behaviour
+  for a video parked beside a game. Per-panel mute is persisted; the dock button mutes everything
+  audible in one press, because the reason to reach for mute is usually not yet knowing which
+  panel started making noise.
+
+- **Layout export and import.** `Services/LayoutBundle.cs` writes every layout to one
+  `.driftdeck` file. Import adds rather than replaces: a name collision becomes
+  `Name (imported)`, since silently overwriting a layout someone spent weeks on is not a
+  recoverable mistake. The Settings rule pickers bind to an `ObservableCollection`, so freshly
+  imported names are selectable without reopening the dialog.
+
+### Startup, quick layouts, hidden-panel suspend, log rotation (Tier 3)
+
+- **Pause hidden browser panels.** Hiding the overlay hid the windows and nothing else: every
+  WebView2 kept rendering, decoding video, and running page timers, spending GPU and CPU during
+  exactly the moment the user hid the overlay to get them back. `PanelHost.SuspendContentAsync`
+  collapses the control — WebView2 refuses to suspend visible content — then calls
+  `CoreWebView2.TrySuspendAsync`; `ResumeContent` runs before the windows come back up so a page
+  is already live when it appears. A panel that is audibly playing and not muted is skipped:
+  music behind a game is a reason to hide the overlay, not to silence it. Suspension is fire and
+  forget, because a hidden overlay must not wait on a browser. Switchable off for pages that need
+  a live connection.
+
+- **Start with Windows.** `Services/StartupRegistration.cs` writes the per-user `Run` key rather
+  than a Startup-folder shortcut, which would need COM shell interop, and never a machine-wide
+  key, which would need elevation for a portable folder owned by one user. The registry is the
+  truth rather than a copy in settings.json, because the user can disable the entry from Task
+  Manager and a stored duplicate would then disagree with reality — `IsEnabled` therefore means
+  "registered", not "will definitely run". A moved or renamed folder leaves a stale entry that
+  launches nothing, so `RefreshIfStale` repoints it on the next launch.
+
+- **Quick layouts.** `Ctrl+Alt+1` to `Ctrl+Alt+9`, assigned in Settings. Rules already cover
+  switching that should happen by itself; this covers deliberately wanting a different workspace
+  now, which otherwise means clicking the dock and taking focus off a fullscreen game. The slot
+  is stored in `Models/QuickLayout.cs` rather than derived from sorted layout names, which would
+  silently remap every shortcut the moment a layout was added. `GlobalHotkeyService` collects
+  refusals into `RejectedQuickSlots` instead of throwing: a `Ctrl+Alt+4` already owned by another
+  application must not cost the user the pass-through shortcut, which is the one hotkey the
+  overlay cannot work without. Loading this way takes the same manual-override hold as the Load
+  button. Duplicate digits are refused at save time, since the second registration would fail
+  while the row still read as working.
+
+- **Crash log rotation.** `WriteCrashReport` appended to one file per day with no ceiling and no
+  pruning, so a crash loop could write without bound and daily files accumulated forever. Files
+  now roll at 1 MB to `crash-<date>.<n>.log` — rolling rather than truncating, because the first
+  fault of a loop is usually the informative one — and the newest fourteen are kept.
 
 ## Next up
 
 - New panel types: checklist, timer, image pin, markdown notes.
 - Bookmarks and recent URLs per layout.
-- Idle dim for untouched panels.
-- Layout export and import as a shareable file.
-- Tests for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`).
+- Tests for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`,
+  `LayoutBundle`) — owner is handling this.
 - Code signing, once a certificate exists. Azure Trusted Signing is the cheapest route that
   works from GitHub Actions.
+- Installer or `winget` package, so an available update is not a manual ZIP swap.

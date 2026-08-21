@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              FontFamily="Segoe UI"
-             MinWidth="300" MinHeight="200">
+             MinWidth="360" MinHeight="200">
     <Border x:Name="OuterBorder" BorderBrush="{StaticResource StrokeSubtleBrush}" BorderThickness="1"
             CornerRadius="{StaticResource FrameRadius}" Background="{StaticResource SurfaceBaseBrush}">
         <Grid>
@@ -23,7 +23,6 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" MinWidth="40" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -61,12 +60,22 @@
                             AutomationProperties.Name="Panel opacity"
                             ToolTip="Opacity for this panel only" />
 
-                    <Button x:Name="ShadeButton" Grid.Column="6" Style="{StaticResource TitleIconButton}" Width="18"
-                            AutomationProperties.AutomationId="PanelShadeButton"
-                            Content="&#xE70E;" Click="ShadeButton_OnClick"
-                            ToolTip="Roll up to the title bar (Ctrl+M)" />
-                    <Button Grid.Column="7" Style="{StaticResource TitleIconButton}" Width="18" Content="&#xE8BB;"
-                            Click="CloseButton_OnClick" ToolTip="Close this panel (Ctrl+W)" />
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="DuplicateButton" Style="{StaticResource TitleIconButton}" Width="18"
+                                AutomationProperties.AutomationId="PanelDuplicateButton"
+                                Content="&#xE8C8;" Click="DuplicateButton_OnClick"
+                                ToolTip="Duplicate this panel (Ctrl+D)" />
+                        <Button x:Name="LockButton" Style="{StaticResource TitleIconButton}" Width="18"
+                                AutomationProperties.AutomationId="PanelLockButton"
+                                Content="&#xE785;" Click="LockButton_OnClick"
+                                ToolTip="Lock this panel in place (Ctrl+Shift+L)" />
+                        <Button x:Name="ShadeButton" Style="{StaticResource TitleIconButton}" Width="18"
+                                AutomationProperties.AutomationId="PanelShadeButton"
+                                Content="&#xE70E;" Click="ShadeButton_OnClick"
+                                ToolTip="Roll up to the title bar (Ctrl+M)" />
+                        <Button Style="{StaticResource TitleIconButton}" Width="18" Content="&#xE8BB;"
+                                Click="CloseButton_OnClick" ToolTip="Close this panel (Ctrl+W)" />
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -86,6 +95,10 @@
                             ToolTip="Forward (Alt+Right)" />
                     <Button x:Name="ReloadButton" Style="{StaticResource IconButton}" Content="&#xE72C;"
                             Margin="3,0,0,0" Click="ReloadButton_OnClick" ToolTip="Reload (Ctrl+R)" />
+                    <Button x:Name="MuteButton" Style="{StaticResource IconButton}" Content="&#xE767;"
+                            Margin="3,0,0,0" Click="MuteButton_OnClick"
+                            AutomationProperties.AutomationId="PanelMuteButton"
+                            ToolTip="Mute this panel's audio (Ctrl+Shift+M)" />
                 </StackPanel>
 
                 <TextBox x:Name="AddressBox" Grid.Column="1" KeyDown="AddressBox_OnKeyDown"

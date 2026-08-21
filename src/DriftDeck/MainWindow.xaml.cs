@@ -15,7 +15,7 @@ namespace DriftDeck;
 public partial class MainWindow : Window
 {
     private const double DockHeight = 68;
-    private const double DockMinWidth = 960;
+    private const double DockMinWidth = 990;
     private const double CollapsedWidth = 250;
     private const double CollapsedHeight = 18;
 
@@ -28,6 +28,13 @@ public partial class MainWindow : Window
     private readonly Stack<PanelDefinition> _closedPanels = new();
     private readonly ForegroundWatcher _foreground = new();
     private readonly DispatcherTimer _autoSwitchTimer;
+    private readonly DisplayWatcher _displays = new();
+    private readonly FullscreenProbe _fullscreen = new();
+    private readonly DispatcherTimer _idleTimer;
+
+    /// <summary>When each panel was last used, for idle dimming. Keyed by host, not by id,
+    /// because a layout switch replaces every host.</summary>
+    private readonly Dictionary<PanelHost, DateTime> _lastTouched = [];
 
     private OverlayLayout _layout = OverlayLayout.CreateDefault();
     private AppSettings _settings;
@@ -42,6 +49,7 @@ public partial class MainWindow : Window
     private bool _deleteArmed;
     private bool _shuttingDown;
     private PanelHost? _activeHost;
+    private bool _muteAll;
     private double _expandedDockLeft;
     private double _expandedDockTop;
     private double _expandedDockWidth = 1020;
@@ -60,6 +68,7 @@ public partial class MainWindow : Window
     public ICommand AddNotesCommand { get; }
     public ICommand ReopenPanelCommand { get; }
     public ICommand SaveLayoutCommand { get; }
+    public ICommand MuteAllCommand { get; }
 
     public MainWindow()
     {
@@ -70,6 +79,7 @@ public partial class MainWindow : Window
         AddNotesCommand = new RelayCommand(() => AddPanel(PanelKind.Notes));
         ReopenPanelCommand = new RelayCommand(ReopenLastClosedPanel, () => _closedPanels.Count > 0);
         SaveLayoutCommand = new RelayCommand(() => _ = SaveNamedLayoutAsync());
+        MuteAllCommand = new RelayCommand(ToggleMuteAll);
 
         // Registered here rather than in XAML: InputBindings sit outside the visual tree,
         // so RelativeSource bindings to the window never resolve.
@@ -77,6 +87,7 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(AddNotesCommand, Key.N, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ReopenPanelCommand, Key.T, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(SaveLayoutCommand, Key.S, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(MuteAllCommand, Key.A, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => CyclePanels(1)), Key.Tab, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => CyclePanels(-1)), Key.Tab,
             ModifierKeys.Control | ModifierKeys.Shift));
@@ -87,6 +98,16 @@ public partial class MainWindow : Window
         _autoSwitchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
         _autoSwitchTimer.Tick += AutoSwitchTimer_OnTick;
         _foreground.Changed += Foreground_OnChanged;
+        _displays.Changed += Displays_OnChanged;
+        _fullscreen.BlockingChanged += Fullscreen_OnBlockingChanged;
+
+        // One shared tick for every panel: a timer per panel would be a dozen timers doing
+        // nothing for the entire time the user is actually working.
+        _idleTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _idleTimer.Tick += IdleTimer_OnTick;
 
         _deleteArmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _deleteArmTimer.Tick += (_, _) => DisarmDelete();
@@ -169,9 +190,15 @@ public partial class MainWindow : Window
             throw new FormatException(visibilityError);
         }
 
-        var service = new GlobalHotkeyService(_windowHandle, interactionGesture, visibilityGesture);
+        var slots = settings.QuickLayouts
+            .Where(entry => entry.IsValidSlot && !string.IsNullOrWhiteSpace(entry.LayoutName))
+            .Select(entry => entry.Slot)
+            .ToList();
+
+        var service = new GlobalHotkeyService(_windowHandle, interactionGesture, visibilityGesture, slots);
         service.InteractionToggleRequested += (_, _) => ToggleInteraction();
         service.VisibilityToggleRequested += (_, _) => ToggleVisibility();
+        service.QuickLayoutRequested += (_, slot) => _ = LoadQuickLayoutAsync(slot);
         return service;
     }
 
@@ -191,6 +218,10 @@ public partial class MainWindow : Window
         }
 
         ApplyAutoSwitchSetting();
+        ApplyIdleDimSetting();
+        ApplyFullscreenWarningSetting();
+        ReportRejectedQuickLayouts();
+        RefreshStartupEntry();
         ReportPreviousCrash();
         _ = CheckForUpdatesAsync();
 
@@ -411,6 +442,7 @@ public partial class MainWindow : Window
 
         _panelHosts.Clear();
         _panelWindows.Clear();
+        _lastTouched.Clear();
         foreach (var definition in _layout.Panels)
         {
             AddPanelHost(definition, activate: false);
@@ -429,8 +461,14 @@ public partial class MainWindow : Window
             SnapRectsProvider = GetSnapRects
         };
         host.CloseRequested += PanelHost_OnCloseRequested;
-        host.PanelChanged += (_, _) => ScheduleSave();
+        host.PanelChanged += (_, _) =>
+        {
+            UpdateMuteAllVisuals();
+            ScheduleSave();
+        };
         host.Activated += (_, _) => ActivatePanel(host);
+        host.DuplicateRequested += (_, _) => DuplicatePanel(host);
+        host.UserInteracted += (_, _) => Panel_OnUserInteracted(host);
 
         var panelWindow = new PanelWindow(definition, host)
         {
@@ -443,6 +481,15 @@ public partial class MainWindow : Window
         panelWindow.ShowPanel(EffectiveOpacityFor(definition));
         host.SetGlobalOpacityFactor(GlobalOpacityFactor);
         panelWindow.SetClickThrough(_clickThrough);
+
+        // A panel created while everything else is muted joins that state instead of blaring.
+        if (_muteAll && definition.Kind == PanelKind.Browser)
+        {
+            host.SetMuted(true, notify: false);
+        }
+
+        _lastTouched[host] = DateTime.UtcNow;
+        UpdateMuteAllVisuals();
         if (activate)
         {
             ActivatePanel(host);
@@ -499,6 +546,8 @@ public partial class MainWindow : Window
     private void ActivatePanel(PanelHost activeHost)
     {
         _activeHost = activeHost;
+        _lastTouched[activeHost] = DateTime.UtcNow;
+        activeHost.SetDimmed(false, 1);
         foreach (var host in _panelHosts)
         {
             host.SetActive(ReferenceEquals(host, activeHost));
@@ -551,6 +600,8 @@ public partial class MainWindow : Window
         }
 
         _panelHosts.Remove(host);
+        _lastTouched.Remove(host);
+        UpdateMuteAllVisuals();
         if (ReferenceEquals(_activeHost, host))
         {
             _activeHost = null;
@@ -592,6 +643,303 @@ public partial class MainWindow : Window
         AddPanelHost(definition, activate: true);
         ScheduleSave();
         SetStatus($"{definition.Title} panel added · drag its title bar to move it", StatusKind.Success);
+    }
+
+
+    // ============================ Display changes ============================
+
+    /// <summary>
+    /// Pulls the dock and every panel back onto a monitor that still exists. A saved layout is a
+    /// list of virtual-desktop coordinates, so undocking a laptop, switching a second monitor
+    /// off, or a driver reset can leave panels parked at coordinates no display covers any more —
+    /// present, topmost, and completely unreachable.
+    /// </summary>
+    private void Displays_OnChanged(object? sender, EventArgs e)
+    {
+        if (_shuttingDown)
+        {
+            return;
+        }
+
+        var before = _panelWindows
+            .Select(window => (window.Left, window.Top, window.Width, window.Height))
+            .ToList();
+
+        if (_dockCollapsed)
+        {
+            var workArea = MonitorHelper.WorkAreaForWindow(this);
+            Left = workArea.Right - Width - 12;
+            Top = workArea.Bottom - Height - 8;
+        }
+        else
+        {
+            ClampDockIntoView();
+        }
+
+        foreach (var panelWindow in _panelWindows)
+        {
+            panelWindow.ReclampForDisplayChange();
+        }
+
+        var moved = _panelWindows
+            .Where((window, index) => index < before.Count &&
+                                      (Math.Abs(window.Left - before[index].Left) > 0.5 ||
+                                       Math.Abs(window.Top - before[index].Top) > 0.5 ||
+                                       Math.Abs(window.Width - before[index].Width) > 0.5 ||
+                                       Math.Abs(window.Height - before[index].Height) > 0.5))
+            .Count();
+
+        // Saving matters more than the message: without it the next launch restores the
+        // coordinates that were just found to be unreachable.
+        ScheduleSave();
+
+        SetStatus(moved == 0
+                ? "Displays changed · every panel is still on a monitor"
+                : $"Displays changed · {moved} panel{(moved == 1 ? " was" : "s were")} moved back into view",
+            moved == 0 ? StatusKind.Info : StatusKind.Warning);
+    }
+
+    // ============================ Exclusive fullscreen ============================
+
+    private void ApplyFullscreenWarningSetting()
+    {
+        if (_settings.WarnOnExclusiveFullscreen)
+        {
+            _fullscreen.Start();
+        }
+        else
+        {
+            _fullscreen.Stop();
+        }
+    }
+
+    /// <summary>
+    /// Says why the overlay cannot be seen. Exclusive fullscreen is the one configuration where
+    /// an ordinary topmost window is simply not composited over the foreground application, and
+    /// a silent overlay in that state reads as a broken overlay.
+    /// </summary>
+    private void Fullscreen_OnBlockingChanged(object? sender, bool blocking)
+    {
+        if (!blocking)
+        {
+            SetStatus(IdleStatus(), StatusKind.Info);
+            return;
+        }
+
+        const string message = "An application is running in exclusive fullscreen, so DriftDeck cannot draw " +
+                               "over it. Switch that application to borderless or windowed mode.";
+        SetStatus(message, StatusKind.Warning);
+        _tray?.ShowHint("DriftDeck cannot be shown", message);
+    }
+
+    // ============================ Idle dimming ============================
+
+    private void ApplyIdleDimSetting()
+    {
+        if (_settings.IdleDimEnabled)
+        {
+            TouchAllPanels();
+            _idleTimer.Start();
+            return;
+        }
+
+        _idleTimer.Stop();
+        foreach (var host in _panelHosts)
+        {
+            host.SetDimmed(false, 1);
+        }
+    }
+
+    private void TouchAllPanels()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var host in _panelHosts)
+        {
+            _lastTouched[host] = now;
+        }
+    }
+
+    private void Panel_OnUserInteracted(PanelHost host) => _lastTouched[host] = DateTime.UtcNow;
+
+    /// <summary>
+    /// Fades panels nobody has touched. Two things are deliberately exempt: the active panel,
+    /// which is the one the user is working in, and any panel the pointer is resting over —
+    /// browser content lives in a composition surface and raises no WPF mouse events, so a page
+    /// being read would otherwise fade out from under the reader.
+    /// </summary>
+    private void IdleTimer_OnTick(object? sender, EventArgs e)
+    {
+        if (!_settings.IdleDimEnabled || _panelHosts.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var threshold = TimeSpan.FromSeconds(_settings.ClampedIdleDimSeconds);
+        var factor = _settings.IdleDimFactor;
+        var cursor = CursorProbe.Position(this);
+
+        foreach (var panelWindow in _panelWindows)
+        {
+            var host = panelWindow.Host;
+            var overThisPanel = cursor is { } point &&
+                                new Rect(panelWindow.Left, panelWindow.Top,
+                                    panelWindow.ActualWidth, panelWindow.ActualHeight).Contains(point);
+
+            if (ReferenceEquals(host, _activeHost) || overThisPanel)
+            {
+                _lastTouched[host] = now;
+                host.SetDimmed(false, 1);
+                continue;
+            }
+
+            if (!_lastTouched.TryGetValue(host, out var last))
+            {
+                _lastTouched[host] = now;
+                continue;
+            }
+
+            host.SetDimmed(now - last >= threshold, factor);
+        }
+    }
+
+    // ============================ Audio ============================
+
+    private void MuteAllButton_OnClick(object sender, RoutedEventArgs e) => ToggleMuteAll();
+
+    /// <summary>
+    /// One switch for every browser panel, because the reason to reach for mute is usually that
+    /// something started making noise and the user does not yet know which panel it was.
+    /// </summary>
+    private void ToggleMuteAll()
+    {
+        var browsers = _panelHosts.Where(host => host.Definition.Kind == PanelKind.Browser).ToList();
+        if (browsers.Count == 0)
+        {
+            SetStatus("There are no browser panels to mute", StatusKind.Info);
+            return;
+        }
+
+        // Anything still audible means "silence it"; only an already-silent set unmutes.
+        _muteAll = browsers.Any(host => !host.Definition.IsMuted);
+        foreach (var host in browsers)
+        {
+            host.SetMuted(_muteAll, notify: false);
+        }
+
+        UpdateMuteAllVisuals();
+        ScheduleSave();
+        SetStatus(_muteAll
+                ? $"Muted {browsers.Count} browser panel{(browsers.Count == 1 ? "" : "s")} · Ctrl+Shift+A to unmute"
+                : $"Unmuted {browsers.Count} browser panel{(browsers.Count == 1 ? "" : "s")}",
+            StatusKind.Success);
+    }
+
+    private void UpdateMuteAllVisuals()
+    {
+        var browsers = _panelHosts.Where(host => host.Definition.Kind == PanelKind.Browser).ToList();
+        var allMuted = browsers.Count > 0 && browsers.All(host => host.Definition.IsMuted);
+        _muteAll = allMuted;
+        MuteAllButton.Content = allMuted ? "\uE74F" : "\uE767";
+        MuteAllButton.Foreground = (Brush)FindResource(allMuted ? "WarnBrush" : "MutedBrush");
+        MuteAllButton.ToolTip = allMuted
+            ? "Unmute every browser panel (Ctrl+Shift+A)"
+            : "Mute every browser panel (Ctrl+Shift+A)";
+        MuteAllButton.IsEnabled = browsers.Count > 0;
+    }
+
+    // ============================ Duplicate ============================
+
+    /// <summary>
+    /// Adds a second panel that starts out identical, offset so it is visibly a new window
+    /// rather than the same one. Rebuilding a tuned panel by hand — address, scale, opacity,
+    /// size — is the kind of work an overlay should not ask for twice.
+    /// </summary>
+    private void DuplicatePanel(PanelHost source)
+    {
+        source.CaptureDefinition();
+        var copy = source.Definition.Clone();
+        copy.X += 24;
+        copy.Y += 24;
+        if (!copy.HasCustomTitle)
+        {
+            copy.Title = source.Definition.Title;
+        }
+
+        _layout.Panels.Add(copy);
+        AddPanelHost(copy, activate: true);
+        ScheduleSave();
+        SetStatus($"Duplicated ‘{copy.Title}’", StatusKind.Success);
+    }
+
+
+    // ============================ Quick layouts ============================
+
+    /// <summary>
+    /// Loads the layout bound to a digit. Deliberate, so it outranks the automatic rules exactly
+    /// the way the Load button does — pressing Ctrl+Alt+2 must not be undone a second later by a
+    /// rule for the application still in front.
+    /// </summary>
+    private async Task LoadQuickLayoutAsync(int slot)
+    {
+        var entry = _settings.QuickLayouts.FirstOrDefault(candidate => candidate.Slot == slot);
+        if (entry is null || string.IsNullOrWhiteSpace(entry.LayoutName))
+        {
+            return;
+        }
+
+        var target = LayoutStore.NormalizeName(entry.LayoutName);
+        if (!_layoutStore.Exists(target))
+        {
+            SetStatus($"Ctrl+Alt+{slot} names ‘{target}’, which no longer exists", StatusKind.Warning);
+            return;
+        }
+
+        if (target.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus($"‘{target}’ is already loaded", StatusKind.Info);
+            return;
+        }
+
+        // Same hold the Load button takes: a hand-picked layout wins until the user moves on.
+        _manualOverrideProcess = _foreground.Current().ProcessName;
+        _autoSwitchTimer.Stop();
+        _pendingRule = null;
+
+        await SwitchLayoutAsync(target);
+        SetStatus($"Ctrl+Alt+{slot} · loaded ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
+    }
+
+    /// <summary>
+    /// Says which digits Windows refused. A quick-layout shortcut that silently does nothing is
+    /// worse than one the user knows to reassign, and these combinations are commonly taken.
+    /// </summary>
+    private void ReportRejectedQuickLayouts()
+    {
+        var rejected = _hotkeys?.RejectedQuickSlots ?? [];
+        if (rejected.Count == 0)
+        {
+            return;
+        }
+
+        var digits = string.Join(", ", rejected.Select(slot => $"Ctrl+Alt+{slot}"));
+        SetStatus($"Another application already owns {digits}, so those layout shortcuts are inactive",
+            StatusKind.Warning);
+    }
+
+    // ============================ Start with Windows ============================
+
+    /// <summary>
+    /// Repoints the Windows startup entry after the portable folder has been moved or renamed.
+    /// Without this the entry survives the move and quietly launches nothing.
+    /// </summary>
+    private void RefreshStartupEntry()
+    {
+        if (StartupRegistration.RefreshIfStale())
+        {
+            SetStatus("DriftDeck moved, so its Windows startup entry was updated to the new location",
+                StatusKind.Info);
+        }
     }
 
     // ============================ Modes ============================
@@ -643,14 +991,36 @@ public partial class MainWindow : Window
             }
 
             Hide();
+
+            // After the windows are down, so nothing is suspended while still on screen. Fire
+            // and forget: the overlay is already hidden and must not wait on a browser.
+            if (_settings.SuspendHiddenPanels)
+            {
+                foreach (var host in _panelHosts)
+                {
+                    _ = host.SuspendContentAsync();
+                }
+            }
+
             _tray?.UpdateState(false, _clickThrough);
             return;
+        }
+
+        // Before the windows come up, so a resumed page is already running when it appears.
+        foreach (var host in _panelHosts)
+        {
+            host.ResumeContent();
         }
 
         Show();
         foreach (var panelWindow in _panelWindows)
         {
             panelWindow.ShowPanel(EffectiveOpacityFor(panelWindow.Definition));
+            // Re-asserted through the host, which owns the dim factor as well as the two
+            // opacity factors and clears any holding animation before assigning. Without this a
+            // panel hidden while dimmed would come back stuck at its dimmed opacity, because a
+            // held animation clock outranks the direct assignment ShowPanel makes.
+            panelWindow.Host.SetGlobalOpacityFactor(GlobalOpacityFactor);
             panelWindow.SetClickThrough(_clickThrough);
         }
 
@@ -902,7 +1272,17 @@ public partial class MainWindow : Window
         {
             Owner = IsVisible ? this : null
         };
-        if (dialog.ShowDialog() != true || dialog.ResultSettings is null)
+        var accepted = dialog.ShowDialog() == true;
+
+        // Import writes layouts immediately, so the picker has to be refreshed even when the
+        // dialog was cancelled afterwards.
+        if (dialog.LayoutsChanged)
+        {
+            RefreshLayoutNames();
+            LayoutComboBox.Text = _layout.Name;
+        }
+
+        if (!accepted || dialog.ResultSettings is null)
         {
             return;
         }
@@ -914,9 +1294,15 @@ public partial class MainWindow : Window
             _hotkeys = CreateHotkeyService(dialog.ResultSettings);
             _settings = dialog.ResultSettings;
             ApplyAutoSwitchSetting();
+            ApplyIdleDimSetting();
+            ApplyFullscreenWarningSetting();
             await _settingsStore.SaveAsync(_settings);
             SetStatus($"Settings saved · {_settings.InteractionHotkey} pass-through · {_settings.VisibilityHotkey} hide",
                 StatusKind.Success);
+
+            // Overrides the success message on purpose: a quick-layout digit Windows refused is
+            // the more useful thing to be told about.
+            ReportRejectedQuickLayouts();
         }
         catch (Exception exception)
         {
@@ -1063,7 +1449,10 @@ public partial class MainWindow : Window
         _saveTimer.Stop();
         _deleteArmTimer.Stop();
         _autoSwitchTimer.Stop();
+        _idleTimer.Stop();
         _foreground.Dispose();
+        _displays.Dispose();
+        _fullscreen.Dispose();
         await SaveCurrentLayoutAsync(false);
 
         foreach (var host in _panelHosts)
