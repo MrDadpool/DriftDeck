@@ -1,4 +1,4 @@
-<Window x:Class="DriftDeck.OnboardingWindow"
+﻿<Window x:Class="DriftDeck.OnboardingWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Welcome to DriftDeck" Width="560" SizeToContent="Height"
@@ -92,7 +92,7 @@
 
                 <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
                            FontSize="{StaticResource TextXs}" LineHeight="17"
-                           Text="Every panel has its own opacity and zoom in its title bar. Ctrl+B adds a browser panel, Ctrl+N adds notes, and Ctrl+Shift+T reopens the last one you closed." />
+                           Text="Every panel has its own opacity and zoom in its title bar. Ctrl+B adds a browser panel, Ctrl+N adds notes, Ctrl+K adds a checklist, Ctrl+T adds a timer, Ctrl+I pins an image, and Ctrl+Shift+T reopens the last one you closed." />
             </StackPanel>
         </Grid>
 

@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: dotnet build .\DriftDeck.slnx --configuration Release --no-restore
 
+      - name: Test
+        run: dotnet test .\DriftDeck.slnx --configuration Release --no-build
+
       - name: Create portable Windows build
         shell: pwsh
         run: |
