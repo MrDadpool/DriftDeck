@@ -48,6 +48,8 @@ Named layouts are written to:
 
 Layout writes use a temporary file followed by replacement. Layouts contain panel configuration and built-in notes, but no browser passwords, cookies, or authentication tokens.
 
+Layout schema version 3 adds `RecentUrls`: the addresses opened in that layout, newest first and capped by `UrlHistory.Capacity`. The field defaults to empty, so a version 2 layout needs no conversion. Bookmarks are deliberately not layout state — they live in `settings.json`, because a page kept on purpose is worth reaching from any workspace whereas the history of what was open belongs to the workspace it happened in.
+
 Browser profile data is managed by WebView2 in one environment shared by every panel, rooted at:
 
 ```text

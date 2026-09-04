@@ -54,6 +54,17 @@ First published release. Everything below is new to anyone who has not built fro
   (`Ctrl+Shift+A`). Muting silences without pausing.
 - **Idle dimming**, off by default. Panels you have not touched fade so they stop competing for
   attention. The panel you are working in and any panel the pointer is resting over never fade.
+- **Gather every panel onto the current monitor** from the dock. Display recovery already handled
+  a monitor disappearing; this handles a panel dragged somewhere with no title bar left on screen
+  to grab. Panels are cascaded so each title bar stays clickable, sizes are untouched, and locked
+  panels move too — the lock refuses accidental drags, not deliberate commands.
+- **Copy a notes panel to the clipboard** from its title bar or with `Ctrl+Shift+C`. Notes
+  previously lived only inside the layout file, which made a notes panel somewhere text went in
+  and never came out.
+- **Bookmarks and recent pages** behind the chevron beside a browser panel's address box.
+  Bookmarks are shared by every layout; recent addresses belong to the layout they were opened
+  in, newest first and capped at twelve. Typing a URL into an 18-pixel toolbar during a game was
+  the worst interaction left in the product.
 
 ### Known limitations
 

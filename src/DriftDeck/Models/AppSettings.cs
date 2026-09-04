@@ -47,6 +47,13 @@ public sealed class AppSettings
     /// <summary>Layouts reachable by <c>Ctrl+Alt+&lt;digit&gt;</c> without touching the dock.</summary>
     public List<QuickLayout> QuickLayouts { get; set; } = [];
 
+    /// <summary>
+    /// Saved addresses, shared by every layout and every browser panel. Global rather than per
+    /// layout because a deliberately kept page is worth reaching from any workspace; the list of
+    /// what was recently open is the part that belongs to one layout.
+    /// </summary>
+    public List<Bookmark> Bookmarks { get; set; } = [];
+
     public const int MinIdleDimSeconds = 3;
     public const int MaxIdleDimSeconds = 600;
     public const int MinIdleDimPercent = 10;

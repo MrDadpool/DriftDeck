@@ -15,7 +15,7 @@ namespace DriftDeck;
 public partial class MainWindow : Window
 {
     private const double DockHeight = 68;
-    private const double DockMinWidth = 990;
+    private const double DockMinWidth = 1016;
     private const double CollapsedWidth = 250;
     private const double CollapsedHeight = 18;
 
@@ -469,6 +469,13 @@ public partial class MainWindow : Window
         host.Activated += (_, _) => ActivatePanel(host);
         host.DuplicateRequested += (_, _) => DuplicatePanel(host);
         host.UserInteracted += (_, _) => Panel_OnUserInteracted(host);
+        host.StatusRequested += (_, args) =>
+            SetStatus(args.Message, args.IsWarning ? StatusKind.Warning : StatusKind.Success);
+        host.BookmarksProvider = () => _settings.Bookmarks;
+        host.RecentUrlsProvider = () => _layout.RecentUrls;
+        host.BookmarkAdded += Panel_OnBookmarkAdded;
+        host.BookmarkRemoved += Panel_OnBookmarkRemoved;
+        host.RecentUrlRecorded += Panel_OnRecentUrlRecorded;
 
         var panelWindow = new PanelWindow(definition, host)
         {
@@ -806,6 +813,147 @@ public partial class MainWindow : Window
     // ============================ Audio ============================
 
     private void MuteAllButton_OnClick(object sender, RoutedEventArgs e) => ToggleMuteAll();
+
+    // ============================ Bookmarks and recents ============================
+
+    /// <summary>
+    /// Bookmarks are global, so the dock owns them rather than the panel that saved one — a
+    /// bookmark added in one panel has to be visible in the next.
+    /// </summary>
+    private async void Panel_OnBookmarkAdded(object? sender, Bookmark bookmark)
+    {
+        var existing = _settings.Bookmarks
+            .FirstOrDefault(entry => entry.Url.Equals(bookmark.Url, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            SetStatus($"‘{existing.Label}’ is already bookmarked", StatusKind.Info);
+            return;
+        }
+
+        _settings.Bookmarks.Insert(0, bookmark);
+        SetStatus($"Bookmarked ‘{bookmark.Label}’", StatusKind.Success);
+        await SaveSettingsQuietlyAsync();
+    }
+
+    private async void Panel_OnBookmarkRemoved(object? sender, Bookmark bookmark)
+    {
+        if (_settings.Bookmarks.RemoveAll(entry =>
+                entry.Url.Equals(bookmark.Url, StringComparison.OrdinalIgnoreCase)) == 0)
+        {
+            return;
+        }
+
+        SetStatus($"Removed the bookmark for ‘{bookmark.Label}’", StatusKind.Info);
+        await SaveSettingsQuietlyAsync();
+    }
+
+    /// <summary>
+    /// Recent addresses belong to the layout, so they travel with it and a game workspace does
+    /// not fill up with what was read in a work one. Saved on the layout's own debounce, since
+    /// a page load is exactly the moment not to block on a disk write.
+    /// </summary>
+    private void Panel_OnRecentUrlRecorded(object? sender, string url)
+    {
+        if (_layout.RecentUrls.Count > 0 &&
+            _layout.RecentUrls[0].Equals(url, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _layout.RecentUrls = UrlHistory.Push(_layout.RecentUrls, url);
+        ScheduleSave();
+    }
+
+    /// <summary>
+    /// Writes settings.json without reporting success. A bookmark is a small aside, and the
+    /// status strip already said what happened; only a failure is worth interrupting for.
+    /// </summary>
+    private async Task SaveSettingsQuietlyAsync()
+    {
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+        }
+        catch (Exception exception)
+        {
+            SetStatus($"Bookmarks could not be saved: {exception.Message}", StatusKind.Warning);
+        }
+    }
+
+    private void GatherButton_OnClick(object sender, RoutedEventArgs e) => GatherPanels();
+
+    /// <summary>
+    /// Brings every panel onto the monitor the dock is on. Display recovery already handles a
+    /// monitor disappearing; this handles a panel dragged somewhere the user cannot find, which
+    /// the panel itself offers no way out of — the only handle it has is the title bar that went
+    /// off-screen with it.
+    /// </summary>
+    private void GatherPanels()
+    {
+        if (_panelWindows.Count == 0)
+        {
+            SetStatus("No panels are open · Ctrl+B for web, Ctrl+N for notes", StatusKind.Info);
+            return;
+        }
+
+        var workArea = MonitorHelper.WorkAreaForWindow(this);
+        if (workArea.IsEmpty)
+        {
+            workArea = MonitorHelper.VirtualScreen;
+        }
+
+        var sizes = _panelWindows
+            .Select(window => new Size(window.ActualWidth, window.ActualHeight))
+            .ToList();
+        var positions = Gather.Positions(workArea, DockReserve(workArea), sizes);
+
+        var moved = 0;
+        for (var index = 0; index < _panelWindows.Count; index++)
+        {
+            var window = _panelWindows[index];
+            var target = positions[index];
+            if (Math.Abs(window.Left - target.X) > 0.5 || Math.Abs(window.Top - target.Y) > 0.5)
+            {
+                moved++;
+            }
+
+            // A locked panel is moved too. The lock refuses accidental drags; this is a
+            // deliberate command, and a locked panel stranded off-screen is exactly the case
+            // the command exists for.
+            window.Left = target.X;
+            window.Top = target.Y;
+            window.Host.CaptureDefinition();
+            window.BringToFront();
+        }
+
+        ScheduleSave();
+        SetStatus(moved == 0
+                ? "Every panel is already on this monitor"
+                : $"Gathered {moved} of {_panelWindows.Count} panel{(_panelWindows.Count == 1 ? "" : "s")} onto this monitor",
+            moved == 0 ? StatusKind.Info : StatusKind.Success);
+    }
+
+    /// <summary>
+    /// Height to keep clear at the top of the work area so gathered panels do not land under the
+    /// dock. Only counted when the dock is on this monitor and in its upper half: a dock parked
+    /// at the bottom would otherwise cost the panels a strip nothing is covering.
+    /// </summary>
+    private double DockReserve(Rect workArea)
+    {
+        if (_dockCollapsed)
+        {
+            return 0;
+        }
+
+        var dockBottom = Top + ActualHeight;
+        if (dockBottom <= workArea.Top || Top >= workArea.Bottom ||
+            Top > workArea.Top + (workArea.Height / 2))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, dockBottom - workArea.Top);
+    }
 
     /// <summary>
     /// One switch for every browser panel, because the reason to reach for mute is usually that

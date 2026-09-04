@@ -61,6 +61,10 @@
                             ToolTip="Opacity for this panel only" />
 
                     <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="CopyNotesButton" Style="{StaticResource TitleIconButton}" Width="18"
+                                AutomationProperties.AutomationId="PanelCopyNotesButton"
+                                Visibility="Collapsed" Content="&#xF0E3;" Click="CopyNotesButton_OnClick"
+                                ToolTip="Copy these notes to the clipboard (Ctrl+Shift+C)" />
                         <Button x:Name="DuplicateButton" Style="{StaticResource TitleIconButton}" Width="18"
                                 AutomationProperties.AutomationId="PanelDuplicateButton"
                                 Content="&#xE8C8;" Click="DuplicateButton_OnClick"
@@ -105,6 +109,10 @@
                          GotKeyboardFocus="AddressBox_OnGotKeyboardFocus" ToolTip="Address (Ctrl+L)" />
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
+                    <Button x:Name="SuggestionsButton" Style="{StaticResource IconButton}" Content="&#xE70D;"
+                            Margin="0,0,3,0" Click="SuggestionsButton_OnClick"
+                            AutomationProperties.AutomationId="PanelSuggestionsButton"
+                            ToolTip="Bookmarks and recent addresses" />
                     <Button Style="{StaticResource GhostButton}" Content="Go" Width="42" Click="GoButton_OnClick" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE8A7;" Margin="3,0,0,0"
                             Click="OpenExternalButton_OnClick"
@@ -141,6 +149,69 @@
                                     Margin="0,18,0,0" Width="112" Click="ReloadButton_OnClick" />
                         </StackPanel>
                     </Grid>
+                </Border>
+
+                <!-- ================= Bookmarks and recents =================
+                     An overlay inside the panel, not a WPF Popup: a Popup is its own window,
+                     and every DriftDeck window is topmost, which is exactly the case where
+                     popup ordering goes wrong. Staying inside the panel also means the
+                     pass-through scrim and the panel's own opacity apply to it unchanged. -->
+                <Border x:Name="SuggestionsSurface" Visibility="Collapsed" VerticalAlignment="Top"
+                        PreviewKeyDown="SuggestionsSurface_OnPreviewKeyDown"
+                        MaxHeight="260" Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource StrokeSubtleBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,2,0">
+                        <StackPanel Margin="8,7,8,8">
+                            <Grid>
+                                <TextBlock Text="Bookmarks" Style="{StaticResource GroupLabel}" />
+                                <Button x:Name="AddBookmarkButton" Style="{StaticResource GhostButton}"
+                                        HorizontalAlignment="Right" Content="Add this page"
+                                        AutomationProperties.AutomationId="PanelAddBookmarkButton"
+                                        Click="AddBookmarkButton_OnClick" />
+                            </Grid>
+
+                            <TextBlock x:Name="NoBookmarksText" Text="Nothing saved yet."
+                                       Margin="2,4,0,2" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="{StaticResource TextSm}" />
+                            <ItemsControl x:Name="BookmarkList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Style="{StaticResource GhostButton}"
+                                                    HorizontalContentAlignment="Left"
+                                                    Content="{Binding Label}" ToolTip="{Binding Url}"
+                                                    Click="BookmarkItem_OnClick" />
+                                            <Button Grid.Column="1" Style="{StaticResource TitleIconButton}"
+                                                    Width="18" Content="&#xE8BB;" VerticalAlignment="Center"
+                                                    Click="RemoveBookmarkButton_OnClick"
+                                                    ToolTip="Remove this bookmark" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Recent in this layout" Style="{StaticResource GroupLabel}"
+                                       Margin="0,10,0,0" />
+                            <TextBlock x:Name="NoRecentsText" Text="No pages opened here yet."
+                                       Margin="2,4,0,2" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="{StaticResource TextSm}" />
+                            <ItemsControl x:Name="RecentList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource GhostButton}"
+                                                HorizontalContentAlignment="Left"
+                                                Content="{Binding Label}" ToolTip="{Binding Url}"
+                                                Click="RecentItem_OnClick" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
                 <!-- No border of its own: the panel frame already provides containment. -->

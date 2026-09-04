@@ -465,6 +465,9 @@ public partial class SettingsWindow : Window
             StartHidden = StartHiddenCheckBox.IsChecked == true,
             HasSeenOnboarding = _original.HasSeenOnboarding,
             DismissedUpdateTag = _original.DismissedUpdateTag,
+            // Carried, not edited here: bookmarks are added and removed from the panels
+            // themselves, and this dialog rebuilds the settings object from scratch.
+            Bookmarks = _original.Bookmarks,
             AutoSwitchLayouts = AutoSwitchCheckBox.IsChecked == true,
             CheckForUpdates = CheckForUpdatesCheckBox.IsChecked == true,
             IdleDimEnabled = IdleDimCheckBox.IsChecked == true,

@@ -163,6 +163,7 @@ makes a compact UI unusable rather than dense.
 | Lock / unlock panel | `Ctrl+Shift+L` |
 | Mute / unmute panel | `Ctrl+Shift+M` |
 | Mute / unmute every browser panel | `Ctrl+Shift+A` |
+| Copy the focused notes panel | `Ctrl+Shift+C` (notes panels only) |
 | Load quick layout 1-9 | `Ctrl+Alt+1` … `Ctrl+Alt+9` (configurable) |
 | Content scale | `Ctrl+±` |
 | Back / forward | `Alt+←` / `Alt+→` |
@@ -270,17 +271,56 @@ still have left a `DriftDeck.exe.WebView2\` folder next to `DriftDeck.exe`; it i
   now roll at 1 MB to `crash-<date>.<n>.log` — rolling rather than truncating, because the first
   fault of a loop is usually the informative one — and the newest fourteen are kept.
 
+### Gather, notes export, bookmarks (Tier 4)
+
+- **Gather panels onto the current monitor.** `Services/Gather.cs` is the placement math as a
+  pure function, like `Snap` and `LayoutRule`: given a work area and the panel sizes, it returns
+  positions, cascading by 28 within a column and wrapping to a new column at the bottom edge.
+  A cascade rather than a tile, because tiling would have to resize panels and overlapping title
+  bars still stay individually clickable. The dock's own band is reserved only when the dock is
+  on that monitor and in its upper half. Locked panels are moved: the lock refuses accidental
+  drags, and a locked panel stranded off-screen is the exact case the command exists for.
+  Reached by one dock icon button — deliberately no shortcut, since the dock is what the user
+  still has when a panel is unreachable.
+
+- **Notes to the clipboard.** A title-bar button on notes panels and `Ctrl+Shift+C`. The key
+  binding is registered only on notes panels, because `Ctrl+Shift+C` is DevTools inspect inside
+  WebView2 and a binding on the shared control would swallow it on every browser panel. The
+  clipboard call is wrapped: any process can hold the clipboard open and Windows fails the call
+  rather than waiting, and an unhandled throw would take an always-on-top window with it.
+  `Controls/PanelStatusEventArgs.cs` is the channel panels use to ask the dock for a status
+  message, since a status strip per panel would put the same sentence in six places.
+
+- **Bookmarks and recent addresses.** Bookmarks are global (`AppSettings.Bookmarks`); recents
+  belong to the layout (`OverlayLayout.RecentUrls`, schema version 3, cap 12) so they travel with
+  export and import and a game workspace does not fill with what was read in a work one.
+  `Services/UrlHistory.cs` holds the push, dedup, cap, and display-shortening as pure functions.
+  The picker is an overlay inside the panel rather than a WPF `Popup`: a `Popup` is its own
+  window and every DriftDeck window is topmost, which is exactly where popup ordering goes
+  wrong. Panels pull the two lists each time the picker opens rather than binding to them, so a
+  bookmark added in one panel needs no change notification to appear in the next. Recents are
+  recorded on a successful `NavigationCompleted` — recording on `NavigationStarting` would fill
+  the list with typos and dead hosts. `SettingsWindow` rebuilds `AppSettings` from scratch on
+  Save, so it now carries `Bookmarks` across explicitly.
+
 ## In progress
 
-Nothing. Three pull requests merged, none open.
+Nothing. Three pull requests merged; the Tier 4 batch above is on
+`feat/gather-notes-bookmarks` and has never been executed.
 
 ## Next up
 
 ### Blocking the first release
 
-1. **Smoke-test a build.** Owner action; the assistant cannot run WPF. Grab the portable ZIP from
-   the last passing CI run, or `.\scripts\Build-Portable.ps1`. Watch, in order of how likely each
-   is to be wrong:
+1. **Smoke-test a build.** Owner action; the assistant cannot run WPF — and cannot even compile
+   locally, since the machine has SDK 8 against a `net10.0` target, so CI is the only compiler in
+   the loop. Grab the portable ZIP from the last passing CI run, or `.\scripts\Build-Portable.ps1`.
+   Watch, in order of how likely each is to be wrong:
+   - the bookmarks/recents picker: it is an in-panel overlay, so check it is not clipped by a
+     short panel and that Escape and clicking another panel both close it
+   - `Ctrl+Shift+C` on a notes panel, and that it is still DevTools inspect on a browser panel
+   - the gather button against a panel dragged off-screen, and with a dock parked at the bottom
+   - the dock at its new 1016 minimum width, on the smallest display in use
    - hide and restore the overlay — `TrySuspendAsync` has a visibility precondition, and
      collapsing the control to satisfy it is the least certain call in the batch
    - `Ctrl+Shift+M` against `Ctrl+M`, to confirm WPF input-binding precedence
@@ -296,29 +336,19 @@ Nothing. Three pull requests merged, none open.
 
 ### Features, in the order they are worth doing
 
-3. **Gather every panel onto the current monitor.** Display recovery covers a monitor
-   disappearing; nothing covers a panel dragged somewhere the user cannot find. Reuses the
-   clamping and cascade logic already in `MainWindow`, so it is small.
-
-4. **Notes export and clipboard copy.** Notes live only inside layout JSON. There is no way to get
-   them out, which makes the app a place data goes in and does not leave.
-
-5. **Bookmarks and recent URLs per layout.** Typing an address into an 18-pixel toolbar during a
-   game is the worst interaction left in the product.
-
-6. **Tray panel list.** The tray menu is four fixed items. Listing open panels gives a way to
+3. **Tray panel list.** The tray menu is four fixed items. Listing open panels gives a way to
    reach one without the dock.
 
-7. **Timer and checklist panel types.** Of the four proposed panel types these are the two that
+4. **Timer and checklist panel types.** Of the four proposed panel types these are the two that
    pair with the actual use case — cooldowns and quest steps.
 
-8. **Keyboard accessibility.** Tab traversal across the dock and panels, and
+5. **Keyboard accessibility.** Tab traversal across the dock and panels, and
    `AutomationProperties` on the controls that still lack them.
 
 ### Parked, with a reason
 
 - **Tests** for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`,
-  `LayoutBundle`, `QuickLayout`) — owner is handling this. They were written as pure functions
+  `LayoutBundle`, `QuickLayout`, `Gather`, `UrlHistory`) — owner is handling this. They were written as pure functions
   precisely so this is cheap.
 - **Code signing**, once a certificate exists. Azure Trusted Signing is the cheapest route that
   works from GitHub Actions. Note this gates a *good* first release rather than any release:

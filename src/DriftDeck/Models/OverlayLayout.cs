@@ -11,9 +11,16 @@ public sealed class OverlayLayout
     public double Opacity { get; set; } = 0.98;
     public List<PanelDefinition> Panels { get; set; } = [];
 
+    /// <summary>
+    /// Addresses opened in this layout, newest first, capped by
+    /// <see cref="Services.UrlHistory.Capacity"/>. A layout written before this field existed
+    /// deserializes to an empty list, so no migration step is needed.
+    /// </summary>
+    public List<string> RecentUrls { get; set; } = [];
+
     public static OverlayLayout CreateDefault() => new()
     {
-        Version = 2,
+        Version = 3,
         Panels =
         [
             PanelDefinition.CreateBrowser(80, 170),

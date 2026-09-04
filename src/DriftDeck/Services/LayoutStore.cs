@@ -50,6 +50,7 @@ public sealed class LayoutStore
                          ?? OverlayLayout.CreateDefault();
             layout.Name = safeName;
             layout.Panels ??= [];
+            layout.RecentUrls ??= [];
             if (layout.Version < 2)
             {
                 foreach (var panel in layout.Panels)
@@ -58,9 +59,13 @@ public sealed class LayoutStore
                     panel.Y += layout.Top + 94;
                 }
 
-                layout.Version = 2;
                 layout.Height = 94;
             }
+
+            // Version 3 only adds RecentUrls, which defaults to empty, so there is nothing to
+            // convert — the number is stamped so a future change can tell the two apart.
+            layout.Version = 3;
+
             if (layout.Panels.Count == 0)
             {
                 layout.Panels.Add(PanelDefinition.CreateBrowser(24, 24));

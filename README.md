@@ -73,6 +73,7 @@ Panel and dock shortcuts, active while DriftDeck has focus:
 | Lock or unlock the focused panel | `Ctrl+Shift+L` |
 | Mute or unmute the focused browser panel | `Ctrl+Shift+M` |
 | Mute or unmute every browser panel | `Ctrl+Shift+A` |
+| Copy the focused notes panel to the clipboard | `Ctrl+Shift+C` |
 
 Quick-layout shortcuts are global like the two above, and are assigned under `SETTINGS`:
 
@@ -81,6 +82,26 @@ Quick-layout shortcuts are global like the two above, and are assigned under `SE
 | Load the layout assigned to a digit | `Ctrl+Alt+1` … `Ctrl+Alt+9` |
 
 Shortcuts are configurable under `SETTINGS`. Saved settings from an existing installation may contain different shortcuts. DriftDeck rejects common Windows-reserved combinations such as `Alt+Space`.
+
+### Finding lost panels
+
+A panel dragged onto a monitor that is later switched off, or simply dragged past the edge of the
+desktop, has no handle left to grab — the title bar went with it. The dock's **fit-page** button
+brings every panel back onto the monitor the dock is on, cascading them so each title bar stays
+clickable. Sizes are left alone, and locked panels are moved too: the lock exists to refuse
+accidental drags, not deliberate commands.
+
+### Notes
+
+Notes save as you type. The clipboard button on a notes panel's title bar, or `Ctrl+Shift+C`,
+copies the whole note out — otherwise notes live only inside the layout file.
+
+### Bookmarks and recent pages
+
+The chevron beside a browser panel's address box opens a picker with two lists: bookmarks, which
+are shared by every layout, and the addresses recently opened in the current layout, newest first
+and capped at twelve. **Add this page** bookmarks whatever the panel is showing. Typing an address
+into a panel toolbar mid-game is the interaction worth avoiding.
 
 ### Layouts
 

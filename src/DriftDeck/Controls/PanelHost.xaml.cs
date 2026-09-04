@@ -41,12 +41,33 @@ public partial class PanelHost : UserControl, IDisposable
     /// <summary>Any deliberate use of this panel, which is what idle dimming resets on.</summary>
     public event EventHandler? UserInteracted;
 
+    /// <summary>A message for the dock's status strip. See <see cref="PanelStatusEventArgs"/>.</summary>
+    public event EventHandler<PanelStatusEventArgs>? StatusRequested;
+
+    /// <summary>A page the user asked to keep. The owner holds the list, not the panel.</summary>
+    public event EventHandler<Bookmark>? BookmarkAdded;
+
+    public event EventHandler<Bookmark>? BookmarkRemoved;
+
+    /// <summary>An address that finished loading, offered to the layout's recent list.</summary>
+    public event EventHandler<string>? RecentUrlRecorded;
+
+    /// <summary>
+    /// Bookmarks (global) and recent addresses (this layout). Asked for each time the picker
+    /// opens rather than bound: the lists are short, the owner keeps the only copy, and a
+    /// pull avoids every panel subscribing to change notifications it does not need.
+    /// </summary>
+    public Func<IReadOnlyList<Bookmark>>? BookmarksProvider { get; set; }
+
+    public Func<IReadOnlyList<string>>? RecentUrlsProvider { get; set; }
+
     public ICommand FocusAddressCommand { get; }
     public ICommand ReloadCommand { get; }
     public ICommand ClosePanelCommand { get; }
     public ICommand DuplicatePanelCommand { get; }
     public ICommand ToggleLockCommand { get; }
     public ICommand ToggleMuteCommand { get; }
+    public ICommand CopyNotesCommand { get; }
 
     public PanelHost(PanelDefinition definition)
     {
@@ -59,6 +80,7 @@ public partial class PanelHost : UserControl, IDisposable
         DuplicatePanelCommand = new RelayCommand(() => DuplicateRequested?.Invoke(this, EventArgs.Empty));
         ToggleLockCommand = new RelayCommand(ToggleLock);
         ToggleMuteCommand = new RelayCommand(() => SetMuted(!Definition.IsMuted, notify: true));
+        CopyNotesCommand = new RelayCommand(CopyNotesToClipboard);
 
         // InputBindings live outside the visual tree, so they are wired up in code.
         InputBindings.Add(new KeyBinding(FocusAddressCommand, Key.L, ModifierKeys.Control));
@@ -110,6 +132,10 @@ public partial class PanelHost : UserControl, IDisposable
             BrowserSurface.Visibility = Visibility.Collapsed;
             NotesSurface.Visibility = Visibility.Visible;
             NotesBox.Text = definition.Notes;
+            CopyNotesButton.Visibility = Visibility.Visible;
+            // Registered only on notes panels: Ctrl+Shift+C is DevTools inspect inside
+            // WebView2, and a binding here would swallow it on every browser panel.
+            InputBindings.Add(new KeyBinding(CopyNotesCommand, Key.C, ModifierKeys.Control | ModifierKeys.Shift));
             UpdateNotesPlaceholder();
             Loaded += (_, _) => NotesBox.Focus();
         }
@@ -165,6 +191,17 @@ public partial class PanelHost : UserControl, IDisposable
     {
         StopLoadingBar();
         UpdateNavigationState();
+        if (e.IsSuccess)
+        {
+            // Only a page that actually loaded is worth remembering. Recording on
+            // NavigationStarting instead would fill the list with typos and dead hosts.
+            var source = Browser.CoreWebView2?.Source;
+            if (UrlHistory.ShouldRecord(source))
+            {
+                RecentUrlRecorded?.Invoke(this, source!);
+            }
+        }
+
         if (e.IsSuccess || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled)
         {
             return;
@@ -780,6 +817,156 @@ public partial class PanelHost : UserControl, IDisposable
     private void UpdateNotesPlaceholder() =>
         NotesPlaceholder.Visibility = NotesBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+    // ============================ Bookmarks and recents ============================
+
+    private void SuggestionsButton_OnClick(object sender, RoutedEventArgs e) =>
+        SetSuggestionsOpen(SuggestionsSurface.Visibility != Visibility.Visible);
+
+    /// <summary>
+    /// Shows or hides the picker, rebuilding it on the way open. A rebuild rather than a live
+    /// binding: bookmarks are global, so a panel would otherwise have to be told when another
+    /// panel changed them.
+    /// </summary>
+    private void SetSuggestionsOpen(bool open)
+    {
+        if (!open)
+        {
+            SuggestionsSurface.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (Definition.Kind != PanelKind.Browser)
+        {
+            return;
+        }
+
+        ReportInteraction();
+        var bookmarks = BookmarksProvider?.Invoke() ?? [];
+        var recents = RecentUrlsProvider?.Invoke() ?? [];
+
+        BookmarkList.ItemsSource = bookmarks;
+        NoBookmarksText.Visibility = bookmarks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        RecentList.ItemsSource = recents
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => new RecentEntry(url))
+            .ToList();
+        NoRecentsText.Visibility = recents.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        SuggestionsSurface.Visibility = Visibility.Visible;
+    }
+
+    private void SuggestionsSurface_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+        {
+            return;
+        }
+
+        SetSuggestionsOpen(false);
+        e.Handled = true;
+    }
+
+    private void AddBookmarkButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var url = Browser.CoreWebView2?.Source ?? AddressBox.Text;
+        if (!UrlHistory.ShouldRecord(url))
+        {
+            StatusRequested?.Invoke(this, new PanelStatusEventArgs(
+                "There is no web page loaded here to bookmark", isWarning: true));
+            return;
+        }
+
+        var bookmark = new Bookmark { Title = Definition.Title, Url = url };
+        BookmarkAdded?.Invoke(this, bookmark);
+        SetSuggestionsOpen(false);
+    }
+
+    private void BookmarkItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Bookmark bookmark })
+        {
+            SetSuggestionsOpen(false);
+            Navigate(bookmark.Url);
+        }
+    }
+
+    private void RemoveBookmarkButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Bookmark bookmark })
+        {
+            return;
+        }
+
+        BookmarkRemoved?.Invoke(this, bookmark);
+        // Reopened rather than left standing: the list the user is looking at has changed.
+        SetSuggestionsOpen(true);
+    }
+
+    private void RecentItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: RecentEntry entry })
+        {
+            SetSuggestionsOpen(false);
+            Navigate(entry.Url);
+        }
+    }
+
+    /// <summary>
+    /// One recent address, shortened for a panel toolbar's width. The full address stays in the
+    /// tool tip, so the short form hides nothing.
+    /// </summary>
+    private sealed class RecentEntry(string url)
+    {
+        public string Url { get; } = url;
+        public string Label { get; } = UrlHistory.Shorten(url);
+    }
+
+    // ============================ Notes ============================
+
+    private void CopyNotesButton_OnClick(object sender, RoutedEventArgs e) => CopyNotesToClipboard();
+
+    /// <summary>
+    /// Puts the note text on the clipboard. Notes otherwise live only inside layout JSON, which
+    /// makes the panel somewhere text goes in and never comes out.
+    /// </summary>
+    private void CopyNotesToClipboard()
+    {
+        if (Definition.Kind != PanelKind.Notes)
+        {
+            return;
+        }
+
+        ReportInteraction();
+        var text = NotesBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            StatusRequested?.Invoke(this, new PanelStatusEventArgs(
+                $"‘{Definition.Title}’ is empty, so there was nothing to copy", isWarning: true));
+            return;
+        }
+
+        try
+        {
+            // Any process can hold the clipboard open, and Windows then fails the call rather
+            // than waiting. A retrying overwrite is worse than a reported failure here: the
+            // user can press the button again, and an unhandled throw would take an
+            // always-on-top window down with it.
+            Clipboard.SetText(text);
+        }
+        catch (Exception exception)
+        {
+            StatusRequested?.Invoke(this, new PanelStatusEventArgs(
+                $"The clipboard is busy, so the notes were not copied. {exception.Message}", isWarning: true));
+            return;
+        }
+
+        var lines = text.Split('\n').Length;
+        StatusRequested?.Invoke(this, new PanelStatusEventArgs(
+            $"Copied ‘{Definition.Title}’ · {lines} line{(lines == 1 ? "" : "s")} on the clipboard",
+            isWarning: false));
+    }
+
     private void AddressBox_OnKeyDown(object sender, KeyEventArgs e)
     {
         switch (e.Key)
@@ -860,6 +1047,12 @@ public partial class PanelHost : UserControl, IDisposable
             ? Visibility.Collapsed
             : Visibility.Visible;
         ContentArea.Visibility = shaded ? Visibility.Collapsed : Visibility.Visible;
+        if (shaded)
+        {
+            // The picker lives inside the content area, which a rolled-up panel does not show.
+            SetSuggestionsOpen(false);
+        }
+
         ResizeHint.Visibility = shaded ? Visibility.Collapsed : Visibility.Visible;
         ShadeButton.Content = shaded ? "\uE70D" : "\uE70E";
         ShadeButton.ToolTip = shaded ? "Roll back down (Ctrl+M)" : "Roll up to the title bar (Ctrl+M)";
@@ -905,6 +1098,13 @@ public partial class PanelHost : UserControl, IDisposable
     /// </summary>
     public void SetActive(bool active)
     {
+        if (!active)
+        {
+            // Clicking a different panel is a clear "not this" — the picker closes with it
+            // rather than staying open over content the user has left.
+            SetSuggestionsOpen(false);
+        }
+
         OuterBorder.BorderBrush = (Brush)FindResource(active ? "AccentBrush" : "StrokeSubtleBrush");
         KindStripe.Fill = (Brush)FindResource(active ? "AccentBrush" : "StrokeSubtleBrush");
         DragSurface.Background = (Brush)FindResource(active ? "SurfaceActiveBrush" : "SurfaceRaisedBrush");
