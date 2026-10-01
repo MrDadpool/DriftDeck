@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -142,6 +142,11 @@ public partial class PanelHost : UserControl, IDisposable
             ImageSurface.Visibility = Visibility.Visible;
             InputBindings.Add(new KeyBinding(new RelayCommand(PasteImage), Key.V, ModifierKeys.Control));
             LoadImage(definition.ImagePath);
+            // Key events route from the focused element upward, so the host must hold focus
+            // itself for Ctrl+V to reach its binding once the Choose button has collapsed.
+            Focusable = true;
+            FocusVisualStyle = null;
+            ImageSurface.PreviewMouseDown += (_, _) => Focus();
             Loaded += (_, _) => Focus();
         }
         else if (definition.Kind == PanelKind.Timer)

@@ -18,7 +18,10 @@
                 <CheckBox IsChecked="{Binding IsDone}" VerticalAlignment="Center"
                           AutomationProperties.Name="Done" />
 
+                <!-- The implicit TextBox style sets FontSize, which would block the content scale
+                     ApplyContentScale puts on the list. -->
                 <TextBox x:Name="ItemText" Grid.Column="1" Margin="6,0,0,0"
+                         FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                          Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
                          MaxLength="200" Background="Transparent" BorderThickness="0"
                          Padding="2,3" VerticalContentAlignment="Center"
@@ -289,6 +292,7 @@
                         <!-- The add box sits under the list, so a new item appears where the
                              cursor already is rather than jumping to the top. -->
                         <TextBox x:Name="ChecklistAddBox" Grid.Row="1" Margin="0,6,0,0" MaxLength="200"
+                                 MinHeight="{StaticResource ControlHeight}"
                                  AutomationProperties.Name="Add a checklist item"
                                  KeyDown="ChecklistAddBox_OnKeyDown"
                                  ToolTip="Type an item and press Enter" />
@@ -298,7 +302,7 @@
                                        Foreground="{StaticResource MutedBrush}"
                                        FontSize="{StaticResource TextXs}" />
                             <Button x:Name="ChecklistClearDone" Style="{StaticResource GhostButton}"
-                                    Content="Clear done" Height="18" Padding="8,0"
+                                    Content="Clear done" Height="24" Padding="8,0"
                                     FontSize="{StaticResource TextXs}" HorizontalAlignment="Right"
                                     Visibility="Collapsed" Click="ChecklistClearDone_OnClick"
                                     ToolTip="Remove every ticked item" />
@@ -382,7 +386,7 @@
                                     Width="128" Click="ImageChooseButton_OnClick" />
                         </StackPanel>
 
-                        <Grid Grid.Row="1" Margin="8,4,6,5">
+                        <Grid Grid.Row="1" Margin="8,6,8,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -394,12 +398,12 @@
                                        FontSize="{StaticResource TextXs}"
                                        TextTrimming="CharacterEllipsis" />
                             <Button x:Name="ImageReplaceButton" Grid.Column="1"
-                                    Style="{StaticResource GhostButton}" Content="Replace" Height="18"
+                                    Style="{StaticResource GhostButton}" Content="Replace" Height="24"
                                     Padding="8,0" FontSize="{StaticResource TextXs}"
                                     Visibility="Collapsed" Click="ImageChooseButton_OnClick"
                                     ToolTip="Point this panel at a different image" />
                             <Button x:Name="ImageOpenButton" Grid.Column="2" Margin="4,0,0,0"
-                                    Style="{StaticResource GhostButton}" Content="Open" Height="18"
+                                    Style="{StaticResource GhostButton}" Content="Open" Height="24"
                                     Padding="8,0" FontSize="{StaticResource TextXs}"
                                     Visibility="Collapsed" Click="ImageOpenButton_OnClick"
                                     ToolTip="Open this file in the default image viewer" />

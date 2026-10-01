@@ -97,6 +97,11 @@ public sealed class PanelDefinition
         HasCustomTitle = HasCustomTitle,
         Url = Url,
         Notes = Notes,
+        Items = Items.Select(item => new ChecklistItem { Text = item.Text, IsDone = item.IsDone }).ToList(),
+        ImagePath = ImagePath,
+        TimerDurationSeconds = TimerDurationSeconds,
+        TimerRemainingSeconds = TimerRemainingSeconds,
+        TimerEndUtc = TimerEndUtc,
         X = X,
         Y = Y,
         Width = Width,
@@ -123,7 +128,7 @@ public sealed class PanelDefinition
         Title = "Image",
         X = x,
         Y = y,
-        Width = 360,
+        Width = 420,
         Height = 300
     };
 
@@ -133,7 +138,7 @@ public sealed class PanelDefinition
         Title = "Timer",
         X = x,
         Y = y,
-        Width = 300,
+        Width = 420,
         Height = 200
     };
 
@@ -143,7 +148,7 @@ public sealed class PanelDefinition
         Title = "Checklist",
         X = x,
         Y = y,
-        Width = 300,
+        Width = 420,
         Height = 340
     };
 
@@ -153,7 +158,7 @@ public sealed class PanelDefinition
         Title = "Notes",
         X = x,
         Y = y,
-        Width = 320,
+        Width = 420,
         Height = 390
     };
 }
