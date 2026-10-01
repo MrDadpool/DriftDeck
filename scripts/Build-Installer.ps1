@@ -66,6 +66,7 @@ if ($WithDelta) {
     --packId $packId `
     --packVersion $Version `
     --packDir $publishDirectory `
+    --runtime win-x64 `
     --packTitle 'DriftDeck' `
     --packAuthors 'DriftDeck contributors' `
     --mainExe 'DriftDeck.exe' `
