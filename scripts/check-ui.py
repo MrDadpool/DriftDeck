@@ -11,8 +11,9 @@ keys = {node.get(x + 'Key') for node in resources.iter()}
 for path in root.rglob('*.xaml'):
     tree = ET.parse(path)
     source = path.read_text(encoding='utf-8-sig')
+    local = {node.get(x + 'Key') for node in tree.iter()}
     for key in re.findall(r'\{StaticResource ([\w]+)\}', source):
-        assert key in keys, (path, key)
+        assert key in keys | local, (path, key)
     code = Path(str(path) + '.cs').read_text()
     for handler in re.findall(r'="(\w+_On\w+)"', source):
         assert re.search(r'\b' + handler + r'\s*\(', code), (path, handler)

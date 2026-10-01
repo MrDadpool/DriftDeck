@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using DriftDeck.Models;
 
@@ -11,9 +11,21 @@ public sealed class LayoutStore
     private readonly string _layoutDirectory;
 
     public LayoutStore()
+        : this(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "DriftDeck",
+            "layouts"))
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _layoutDirectory = Path.Combine(appData, "DriftDeck", "layouts");
+    }
+
+    /// <summary>
+    /// Lets a caller point the store at another directory. The only caller that does is the
+    /// test suite, which needs a store that reads and writes somewhere disposable rather than
+    /// the user's real layout folder.
+    /// </summary>
+    public LayoutStore(string layoutDirectory)
+    {
+        _layoutDirectory = layoutDirectory;
     }
 
     public async Task<OverlayLayout> LoadLastAsync()

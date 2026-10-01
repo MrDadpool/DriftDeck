@@ -6,7 +6,7 @@ public sealed class OverlayLayout
     public string Name { get; set; } = "Default";
     public double Left { get; set; } = 80;
     public double Top { get; set; } = 80;
-    public double Width { get; set; } = 820;
+    public double Width { get; set; } = 900;
     public double Height { get; set; } = 146;
     public double Opacity { get; set; } = 0.98;
     public List<PanelDefinition> Panels { get; set; } = [];
@@ -42,6 +42,27 @@ public sealed class PanelDefinition
 
     public string Url { get; set; } = "https://www.youtube.com";
     public string Notes { get; set; } = string.Empty;
+
+    /// <summary>Checklist rows. Empty for every other panel kind.</summary>
+    public List<ChecklistItem> Items { get; set; } = [];
+
+    /// <summary>
+    /// File an image panel shows. Panels point at files rather than copying them; see
+    /// <see cref="ImagePin"/> for why.
+    /// </summary>
+    public string ImagePath { get; set; } = string.Empty;
+
+    /// <summary>Configured length of a timer panel, in seconds.</summary>
+    public int TimerDurationSeconds { get; set; } = TimerState.DefaultDurationSeconds;
+
+    /// <summary>Seconds left while a timer panel is paused.</summary>
+    public int TimerRemainingSeconds { get; set; } = TimerState.DefaultDurationSeconds;
+
+    /// <summary>
+    /// When a running timer ends, in UTC. Null means it is not running. Storing the instant
+    /// rather than a tick count is what lets a timer survive a restart still telling the truth.
+    /// </summary>
+    public DateTime? TimerEndUtc { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
     public double Width { get; set; } = 560;
@@ -96,6 +117,36 @@ public sealed class PanelDefinition
         Y = y
     };
 
+    public static PanelDefinition CreateImagePin(double x, double y) => new()
+    {
+        Kind = PanelKind.ImagePin,
+        Title = "Image",
+        X = x,
+        Y = y,
+        Width = 360,
+        Height = 300
+    };
+
+    public static PanelDefinition CreateTimer(double x, double y) => new()
+    {
+        Kind = PanelKind.Timer,
+        Title = "Timer",
+        X = x,
+        Y = y,
+        Width = 300,
+        Height = 200
+    };
+
+    public static PanelDefinition CreateChecklist(double x, double y) => new()
+    {
+        Kind = PanelKind.Checklist,
+        Title = "Checklist",
+        X = x,
+        Y = y,
+        Width = 300,
+        Height = 340
+    };
+
     public static PanelDefinition CreateNotes(double x, double y) => new()
     {
         Kind = PanelKind.Notes,
@@ -110,5 +161,8 @@ public sealed class PanelDefinition
 public enum PanelKind
 {
     Browser,
-    Notes
+    Notes,
+    Checklist,
+    Timer,
+    ImagePin
 }

@@ -167,6 +167,98 @@ controls below.
 `scripts/check-ui.py` statically checks resource keys, event handlers, and that the dock and
 shaded-panel constants in code match the XAML. Run it after any metric change.
 
+### Tests
+
+`tests\DriftDeck.Tests` covers the four services whose rules are invisible in the running app:
+`Snap` (edge beats grid, the 12-unit threshold, away-from-zero midpoints, guide-line
+construction), `HotkeyGesture` (parse, round trip, the combinations Windows owns, the
+`RegisterHotKey` flag values), `LayoutRule` (case handling, title narrowing, and the guarantee
+that a title-qualified rule outranks a bare one regardless of list order), `Checklist` (what
+counts as an item, the footer wording, clear-done), `TimerState` (every transition, duration
+parsing and formatting, and reading a finished timer hours late), `ImagePin` and `ImageStore`
+(accepted files, caption wording, PNG round trip, and the unreferenced sweep), and `LayoutStore`
+(round trip, name normalisation, copy-without-switching, delete guards, a corrupt file, and the
+version 1 to version 2 panel-position migration).
+
+`LayoutStore` gained a constructor taking a directory so tests read and write a disposable temp
+folder instead of the user's real layouts. Nothing else changed to make the code testable.
+
+```
+dotnet test DriftDeck.slnx
+```
+
+166 tests, all green, and CI runs them between build and packaging.
+
+### Checklist panels
+
+`+ List` on the dock, or `Ctrl+K`. A checklist is a tick box, a line of text, and a footer that
+reports what is **left** rather than what is done — the question a checklist exists to answer.
+
+- Rows bind straight to the persisted `ChecklistItem`, which raises change notifications. A
+  parallel view model for two fields would be more code than it saves.
+- The add box sits under the list, so a new item appears where the cursor already is instead of
+  the view jumping to the top. Enter adds and clears the box; Enter or Escape inside a row
+  returns to the add box, so a burst of typing never reaches for the mouse.
+- The per-row remove button is invisible until the row is hovered or focused. A delete on every
+  line reads as clutter on a list whose usual action is ticking a box.
+- `Clear done` appears only when something is ticked.
+- Blank input is not an item. Overlong text is cut at 200 characters rather than refused, so a
+  paste still lands but one line cannot drive the panel's layout.
+- `Checklist` in `Models/Checklist.cs` holds those rules as pure functions, tested without a
+  window.
+
+Layouts written before checklists existed have no `Items` array; it deserialises to an empty
+list, which is covered by a test.
+
+### Timer panels
+
+`+ Timer` on the dock, or `Ctrl+T`. A countdown with a length box, start/pause, and reset.
+
+- **A running timer is the instant it ends, not a tick count.** `PanelDefinition.TimerEndUtc`
+  holds that instant, so the remaining time is whatever the clock says — the panel can be
+  shaded, the layout saved, or the process killed, and it comes back still telling the truth.
+  This is also what keeps the ~650 ms layout save off the per-second path: the timer persists on
+  start, pause, reset, and length change, never on a tick. The 250 ms `DispatcherTimer` touches
+  the readout and nothing else, and it stops whenever the timer is not running.
+- Reaching zero stops the clock and turns the readout to the warning colour. Nothing else
+  happens — an always-on-top overlay must not steal focus or make noise over a game.
+- Starting a finished timer restarts the full length rather than being a no-op.
+- Changing the length stops a running timer: the persisted end instant was derived from the old
+  length and no longer means anything.
+- The length box reads a bare number as minutes and colons literally, so `5`, `5:00`, `90`, and
+  `1:30:00` all work. Rejected input is rewritten to the length still in force rather than left
+  sitting in an error state the panel has no room for.
+- The readout is the one piece of text outside the five-step type scale. It is what the panel
+  exists to show, and it scales with the panel's content scale like everything else.
+- `TimerState` in `Models/CountdownTimer.cs` is a record struct with pure transitions, so the
+  tests supply their own clock and none of them wait for real time to pass.
+
+### Image panels
+
+`+ Image` on the dock, or `Ctrl+I`. Drop a file on the panel, paste with `Ctrl+V`, or use
+**Choose image**.
+
+- **A panel points at a file; it does not copy it.** An image the user picked is their file in
+  their folder, and duplicating it into DriftDeck's storage would grow a folder they never asked
+  for and never see. The cost is that a pinned image can go missing, which the panel says
+  plainly rather than hiding: the path is kept, the caption reads `name — file is missing`, and
+  the empty state explains what to do.
+- **Pasted images are the exception.** The clipboard hands over pixels with no file behind them,
+  so `Services/ImageStore.cs` writes one as PNG under `%LOCALAPPDATA%\DriftDeck\pasted-images`.
+  PNG because a paste is usually a screenshot or a diagram, where re-encoding artefacts are the
+  whole problem. Pasting a *file* from the clipboard copies nothing — it is treated like a drop.
+- Those pasted files are the only ones DriftDeck owns, and nothing else would ever remove one,
+  so startup sweeps the folder for images no layout points at. Every layout is read, not just
+  the current one, or the sweep would delete an image another layout is still using.
+- The bitmap is loaded with `BitmapCacheOption.OnLoad`, so the file is not held open. A pinned
+  image the user could not then move or delete would be worse than one that goes missing.
+- Fit is uniform and content scale multiplies it, with the scroll viewer supplying panning once
+  the image is bigger than the panel — a zoom and a separate fill mode would be two controls
+  doing one job.
+- The file name becomes the panel title, unless the user has typed one.
+- `Models/ImagePin.cs` holds the accepted extensions, the drop-picking, and the caption wording
+  as pure functions.
+
 ## Keyboard
 
 | Action | Shortcut |
@@ -175,6 +267,10 @@ shaded-panel constants in code match the XAML. Run it after any metric change.
 | Hide / restore overlay | `Ctrl+Alt+H` (configurable) |
 | New browser panel | `Ctrl+B` |
 | New notes panel | `Ctrl+N` |
+| New checklist panel | `Ctrl+K` |
+| New timer panel | `Ctrl+T` |
+| New image panel | `Ctrl+I` |
+| Paste an image into an image panel | `Ctrl+V` |
 | Reopen last closed panel | `Ctrl+Shift+T` |
 | Save layout | `Ctrl+S` |
 | Cycle panels | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
@@ -343,13 +439,15 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
      short panel and that Escape and clicking another panel both close it
    - `Ctrl+Shift+C` on a notes panel, and that it is still DevTools inspect on a browser panel
    - the gather button against a panel dragged off-screen, and with a dock parked at the bottom
-   - the refreshed dock (146 px tall, two-row toolbar) at its 780 minimum width, on the
+   - the refreshed dock (146 px tall, two-row toolbar) at its 860 minimum width — five create buttons share the top row, and 860 is an estimate, on the
      smallest display in use, and that collapse/restore still lands on the 340 x 30 strip
    - hide and restore the overlay — `TrySuspendAsync` has a visibility precondition, and
      collapsing the control to satisfy it is the least certain call in the batch
    - `Ctrl+Shift+M` against `Ctrl+M`, to confirm WPF input-binding precedence
    - the Settings window with three sections added — it is `SizeToContent="Height"` under a
      `MaxHeight`, so it should scroll rather than clip
+   - checklist, timer, and image panels at the restyled sizes (merged from `panel-types-and-tests`
+     after the restyle, so never seen together); `Ctrl+T` new timer against `Ctrl+Shift+T` reopen
    - unplug a monitor with panels on it, and resume from sleep
 
 2. **Tag v0.3.0.** Fill the date into `CHANGELOG.md`, then `git tag v0.3.0` and push it. This is
@@ -362,17 +460,15 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
 3. **Tray panel list.** The tray menu is four fixed items. Listing open panels gives a way to
    reach one without the dock.
 
-4. **Timer and checklist panel types.** Of the four proposed panel types these are the two that
-   pair with the actual use case — cooldowns and quest steps.
+4. **Markdown notes panel type**, the one proposed panel type still missing.
 
 5. **Keyboard accessibility.** Tab traversal across the dock and panels, and
    `AutomationProperties` on the controls that still lack them.
 
 ### Parked, with a reason
 
-- **Tests** for the pure services (`Snap`, `HotkeyGesture`, `LayoutRule`, `LayoutStore`,
-  `LayoutBundle`, `QuickLayout`, `Gather`, `UrlHistory`) — owner is handling this. They were written as pure functions
-  precisely so this is cheap.
+- **Tests** for `LayoutBundle`, `QuickLayout`, `Gather`, `UrlHistory` — the suite from
+  `panel-types-and-tests` predates them.
 - **Code signing**, once a certificate exists. Azure Trusted Signing is the cheapest route that
   works from GitHub Actions. Note this gates a *good* first release rather than any release:
   SmartScreen warns on every download until it exists.

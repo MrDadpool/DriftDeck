@@ -1,10 +1,17 @@
+﻿using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using DriftDeck.Models;
 using DriftDeck.Services;
 using Microsoft.Web.WebView2.Core;
@@ -25,6 +32,11 @@ public partial class PanelHost : UserControl, IDisposable
     private double _dimFactor = 1;
     private bool _suppressAddressUpdate;
     private bool _suspended;
+    private readonly ObservableCollection<ChecklistItem> _checklist = [];
+    private DispatcherTimer? _timerTick;
+    private TimerState _timer;
+    private bool _timerFinished;
+    private readonly ImageStore _imageStore = new();
 
     public PanelDefinition Definition { get; }
 
@@ -124,12 +136,56 @@ public partial class PanelHost : UserControl, IDisposable
             AddressBox.Text = definition.Url;
             Loaded += BrowserPanel_OnLoaded;
         }
+        else if (definition.Kind == PanelKind.ImagePin)
+        {
+            HideBrowserChrome();
+            ImageSurface.Visibility = Visibility.Visible;
+            InputBindings.Add(new KeyBinding(new RelayCommand(PasteImage), Key.V, ModifierKeys.Control));
+            LoadImage(definition.ImagePath);
+            Loaded += (_, _) => Focus();
+        }
+        else if (definition.Kind == PanelKind.Timer)
+        {
+            HideBrowserChrome();
+            TimerSurface.Visibility = Visibility.Visible;
+            _timer = new TimerState(
+                Math.Clamp(definition.TimerDurationSeconds, 1, TimerState.MaximumDurationSeconds),
+                Math.Max(0, definition.TimerRemainingSeconds),
+                definition.TimerEndUtc);
+            TimerDurationBox.Text = TimerState.Format(_timer.DurationSeconds);
+            // A timer left running is still running: its end instant was persisted, so the
+            // readout picks up wherever the clock has moved to rather than at a stale count.
+            UpdateTimerDisplay();
+            if (_timer.IsRunning)
+            {
+                StartTimerTicking();
+            }
+        }
+        else if (definition.Kind == PanelKind.Checklist)
+        {
+            HideBrowserChrome();
+            ChecklistSurface.Visibility = Visibility.Visible;
+            definition.Items ??= [];
+            foreach (var item in definition.Items)
+            {
+                _checklist.Add(item);
+            }
+
+            // The collection is the source of truth the panel binds to; the definition's list
+            // is rewritten from it whenever it changes, so persistence needs no separate step.
+            _checklist.CollectionChanged += Checklist_OnCollectionChanged;
+            foreach (var item in _checklist)
+            {
+                item.PropertyChanged += ChecklistItem_OnPropertyChanged;
+            }
+
+            ChecklistItems.ItemsSource = _checklist;
+            UpdateChecklistSummary();
+            Loaded += (_, _) => ChecklistAddBox.Focus();
+        }
         else
         {
-            ToolbarRow.Height = new GridLength(0);
-            BrowserToolbar.Visibility = Visibility.Collapsed;
-            LoadingBar.Visibility = Visibility.Collapsed;
-            BrowserSurface.Visibility = Visibility.Collapsed;
+            HideBrowserChrome();
             NotesSurface.Visibility = Visibility.Visible;
             NotesBox.Text = definition.Notes;
             CopyNotesButton.Visibility = Visibility.Visible;
@@ -223,10 +279,19 @@ public partial class PanelHost : UserControl, IDisposable
             return;
         }
 
-        Definition.Title = title.Trim();
-        TitleText.Text = Definition.Title;
-        SyncWindowTitle();
+        ApplyPanelTitle(title.Trim());
         PanelChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Sets a title the panel worked out for itself — a page title, or an image's file name.
+    /// A name the user typed is checked for by the caller and always wins.
+    /// </summary>
+    private void ApplyPanelTitle(string title)
+    {
+        Definition.Title = title;
+        TitleText.Text = title;
+        SyncWindowTitle();
     }
 
     private void Core_OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -359,6 +424,374 @@ public partial class PanelHost : UserControl, IDisposable
         Motion.Hold(LoadingBar, OpacityProperty, 0, Motion.Base);
     }
 
+    private void HideBrowserChrome()
+    {
+        ToolbarRow.Height = new GridLength(0);
+        BrowserToolbar.Visibility = Visibility.Collapsed;
+        LoadingBar.Visibility = Visibility.Collapsed;
+        BrowserSurface.Visibility = Visibility.Collapsed;
+    }
+
+    // ============================ Image ============================
+
+    /// <summary>
+    /// Points the panel at a file and shows it. A path that no longer resolves is reported in
+    /// the caption rather than cleared: the user chose that file, and silently forgetting it
+    /// would hide the fact that something moved.
+    /// </summary>
+    private void LoadImage(string? path)
+    {
+        var trimmed = (path ?? string.Empty).Trim();
+        Definition.ImagePath = trimmed;
+
+        BitmapImage? bitmap = null;
+        var exists = trimmed.Length > 0 && File.Exists(trimmed);
+        if (exists)
+        {
+            try
+            {
+                bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                // OnLoad, so the file is not held open. A pinned image the user could not then
+                // move or delete would be worse than one that goes missing.
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.UriSource = new Uri(Path.GetFullPath(trimmed));
+                bitmap.EndInit();
+                bitmap.Freeze();
+            }
+            catch (Exception exception) when (exception is IOException or NotSupportedException
+                                                  or UriFormatException or ArgumentException)
+            {
+                bitmap = null;
+                exists = false;
+            }
+        }
+
+        ImageView.Source = bitmap;
+        var hasImage = bitmap is not null;
+        ImageScroller.Visibility = hasImage ? Visibility.Visible : Visibility.Collapsed;
+        ImageEmptyState.Visibility = hasImage ? Visibility.Collapsed : Visibility.Visible;
+        ImageReplaceButton.Visibility = trimmed.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ImageOpenButton.Visibility = hasImage ? Visibility.Visible : Visibility.Collapsed;
+        ImageCaption.Text = ImagePin.Describe(trimmed, exists);
+
+        if (trimmed.Length > 0 && !exists)
+        {
+            ImageEmptyTitle.Text = "That image is gone";
+            ImageEmptyDetail.Text = "The file moved or was deleted. Drop another, paste one, or choose a file.";
+        }
+        else
+        {
+            ImageEmptyTitle.Text = "Drop an image here";
+            ImageEmptyDetail.Text = "Or paste one with Ctrl+V, or choose a file.";
+        }
+
+        ApplyImageScale();
+        // The file name is a better panel title than the generic one, but it never overrides a
+        // name the user typed.
+        if (hasImage && !Definition.HasCustomTitle)
+        {
+            var name = Path.GetFileNameWithoutExtension(trimmed);
+            ApplyPanelTitle(string.IsNullOrWhiteSpace(name) ? "Image" : name);
+        }
+    }
+
+    private void SetImage(string path)
+    {
+        LoadImage(path);
+        PanelChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ImageChooseButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var filter = string.Join(";", ImagePin.SupportedExtensions.Select(extension => $"*{extension}"));
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose an image",
+            Filter = $"Images ({filter})|{filter}|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true)
+        {
+            SetImage(dialog.FileName);
+        }
+    }
+
+    private void ImageOpenButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!File.Exists(Definition.ImagePath))
+        {
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(Definition.ImagePath) { UseShellExecute = true });
+    }
+
+    private void ImageSurface_OnDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = DroppedImagePath(e) is null ? DragDropEffects.None : DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void ImageSurface_OnDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (DroppedImagePath(e) is { } path)
+        {
+            SetImage(path);
+        }
+    }
+
+    private static string? DroppedImagePath(DragEventArgs e) =>
+        e.Data.GetDataPresent(DataFormats.FileDrop)
+            ? ImagePin.FirstSupportedFile(e.Data.GetData(DataFormats.FileDrop) as string[])
+            : null;
+
+    /// <summary>
+    /// A pasted image is the one case where DriftDeck has to own a file: the clipboard hands
+    /// over pixels with no path behind them.
+    /// </summary>
+    private void PasteImage()
+    {
+        if (Definition.Kind != PanelKind.ImagePin)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Clipboard.ContainsFileDropList())
+            {
+                var files = Clipboard.GetFileDropList().Cast<string?>().OfType<string>();
+                if (ImagePin.FirstSupportedFile(files) is { } path)
+                {
+                    SetImage(path);
+                    return;
+                }
+            }
+
+            if (Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+            {
+                SetImage(_imageStore.Save(image));
+            }
+        }
+        catch (Exception exception) when (exception is ExternalException or IOException)
+        {
+            // Another process can hold the clipboard open. Nothing is lost by ignoring the
+            // paste; the user can press it again.
+        }
+    }
+
+    private void ApplyImageScale()
+    {
+        if (ImageView.Source is not BitmapSource source)
+        {
+            return;
+        }
+
+        // Uniform stretch already fits the panel. Content scale multiplies that, and the scroll
+        // viewer supplies panning once the image is larger than the panel.
+        var scale = Definition.ContentScale;
+        if (Math.Abs(scale - 1) < 0.01)
+        {
+            ImageView.Width = double.NaN;
+            ImageView.Height = double.NaN;
+            return;
+        }
+
+        ImageView.Width = source.PixelWidth * scale;
+        ImageView.Height = source.PixelHeight * scale;
+    }
+
+    // ============================ Timer ============================
+
+    private void TimerStartButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var now = DateTime.UtcNow;
+        _timer = _timer.IsRunning ? _timer.Pause(now) : _timer.Start(now);
+        if (_timer.IsRunning)
+        {
+            StartTimerTicking();
+        }
+        else
+        {
+            StopTimerTicking();
+        }
+
+        CommitTimer();
+    }
+
+    private void TimerResetButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        _timer = _timer.Reset();
+        StopTimerTicking();
+        CommitTimer();
+    }
+
+    private void TimerDurationBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ApplyTimerDuration();
+    }
+
+    private void TimerDurationBox_OnLostFocus(object sender, RoutedEventArgs e) => ApplyTimerDuration();
+
+    /// <summary>
+    /// Rejected input is rewritten to the length still in force rather than left sitting there
+    /// in red. The box is two characters wide in practice; an error state would cost more room
+    /// than the mistake is worth.
+    /// </summary>
+    private void ApplyTimerDuration()
+    {
+        if (TimerState.TryParseDuration(TimerDurationBox.Text, out var seconds) &&
+            seconds != _timer.DurationSeconds)
+        {
+            _timer = _timer.WithDuration(seconds);
+            StopTimerTicking();
+            CommitTimer();
+        }
+
+        TimerDurationBox.Text = TimerState.Format(_timer.DurationSeconds);
+    }
+
+    private void StartTimerTicking()
+    {
+        // Quarter-second, so the readout never sits a whole second behind the clock. It only
+        // touches the label — persistence happens on transitions, not on ticks.
+        _timerTick ??= new DispatcherTimer(
+            TimeSpan.FromMilliseconds(250), DispatcherPriority.Normal, (_, _) => OnTimerTick(), Dispatcher);
+        _timerTick.Start();
+    }
+
+    private void StopTimerTicking() => _timerTick?.Stop();
+
+    private void OnTimerTick()
+    {
+        UpdateTimerDisplay();
+        if (_timer.IsRunning && _timer.IsFinishedAt(DateTime.UtcNow))
+        {
+            // Stop the clock but leave the state at zero, so the panel reads as finished until
+            // the user acts. An overlay must never steal focus or make noise over a game, so
+            // reaching zero is reported by the readout alone.
+            _timer = _timer.Pause(DateTime.UtcNow);
+            StopTimerTicking();
+            CommitTimer();
+        }
+    }
+
+    private void CommitTimer()
+    {
+        Definition.TimerDurationSeconds = _timer.DurationSeconds;
+        Definition.TimerRemainingSeconds = _timer.RemainingSeconds;
+        Definition.TimerEndUtc = _timer.EndUtc;
+        UpdateTimerDisplay();
+        if (_initialized)
+        {
+            PanelChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void UpdateTimerDisplay()
+    {
+        var remaining = _timer.RemainingAt(DateTime.UtcNow);
+        TimerReadout.Text = TimerState.Format(remaining);
+        _timerFinished = remaining == 0;
+        TimerReadout.Foreground = (Brush)FindResource(_timerFinished ? "WarnBrush" : "TextBrush");
+        TimerStartButton.Content = _timer.IsRunning ? "Pause" : "Start";
+        TimerResetButton.IsEnabled = _timer.IsRunning || remaining != _timer.DurationSeconds;
+    }
+
+    // ============================ Checklist ============================
+
+    private void ChecklistAddBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (!Checklist.TryCreate(ChecklistAddBox.Text, out var item))
+        {
+            return;
+        }
+
+        _checklist.Add(item);
+        // Cleared rather than left selected: the next thing typed is nearly always another item.
+        ChecklistAddBox.Clear();
+    }
+
+    /// <summary>
+    /// Enter in a row commits the edit and returns to the add box, so a burst of typing never
+    /// has to reach for the mouse. Escape does the same without treating it as a commit.
+    /// </summary>
+    private void ChecklistItemBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Escape))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ChecklistAddBox.Focus();
+    }
+
+    private void ChecklistRemoveButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ChecklistItem item })
+        {
+            _checklist.Remove(item);
+        }
+    }
+
+    private void ChecklistClearDone_OnClick(object sender, RoutedEventArgs e)
+    {
+        Checklist.ClearCompleted(_checklist);
+        ChecklistAddBox.Focus();
+    }
+
+    private void Checklist_OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var item in e.OldItems?.OfType<ChecklistItem>() ?? [])
+        {
+            item.PropertyChanged -= ChecklistItem_OnPropertyChanged;
+        }
+
+        foreach (var item in e.NewItems?.OfType<ChecklistItem>() ?? [])
+        {
+            item.PropertyChanged += ChecklistItem_OnPropertyChanged;
+        }
+
+        CommitChecklist();
+    }
+
+    private void ChecklistItem_OnPropertyChanged(object? sender, PropertyChangedEventArgs e) =>
+        CommitChecklist();
+
+    private void CommitChecklist()
+    {
+        Definition.Items = [.. _checklist];
+        UpdateChecklistSummary();
+        if (_initialized)
+        {
+            PanelChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void UpdateChecklistSummary()
+    {
+        ChecklistSummary.Text = Checklist.Summary(_checklist);
+        ChecklistClearDone.Visibility = _checklist.Any(item => item.IsDone)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
     // ============================ Geometry ============================
 
     public void CaptureDefinition()
@@ -375,6 +808,10 @@ public partial class PanelHost : UserControl, IDisposable
         Definition.Height = panelWindow.IsShaded ? Definition.RestoreHeight : panelWindow.ActualHeight;
         Definition.Opacity = OpacitySlider.Value;
         Definition.Notes = NotesBox.Text;
+        Definition.Items = [.. _checklist];
+        Definition.TimerDurationSeconds = _timer.DurationSeconds;
+        Definition.TimerRemainingSeconds = _timer.RemainingSeconds;
+        Definition.TimerEndUtc = _timer.EndUtc;
         if (Definition.Kind == PanelKind.Browser)
         {
             Definition.Url = AddressBox.Text;
@@ -1086,6 +1523,12 @@ public partial class PanelHost : UserControl, IDisposable
         var baseSize = (double)FindResource("TextMd");
         NotesBox.FontSize = baseSize * scale;
         NotesPlaceholder.FontSize = baseSize * scale;
+        ChecklistItems.FontSize = baseSize * scale;
+        ChecklistAddBox.FontSize = baseSize * scale;
+        ApplyImageScale();
+        // The readout is a display number rather than a step on the type scale; see the panel's
+        // XAML for why it sits outside it.
+        TimerReadout.FontSize = 44 * scale;
         if (notify)
         {
             PanelChanged?.Invoke(this, EventArgs.Empty);
@@ -1118,6 +1561,7 @@ public partial class PanelHost : UserControl, IDisposable
         }
 
         _disposed = true;
+        StopTimerTicking();
         Browser.Dispose();
     }
 }

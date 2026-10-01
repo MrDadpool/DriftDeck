@@ -15,11 +15,12 @@ namespace DriftDeck;
 public partial class MainWindow : Window
 {
     private const double DockHeight = 146;
-    private const double DockMinWidth = 780;
+    private const double DockMinWidth = 860;
     private const double CollapsedWidth = 340;
     private const double CollapsedHeight = 30;
 
     private readonly LayoutStore _layoutStore = new();
+    private readonly ImageStore _imageStore = new();
     private readonly SettingsStore _settingsStore = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _deleteArmTimer;
@@ -52,7 +53,7 @@ public partial class MainWindow : Window
     private bool _muteAll;
     private double _expandedDockLeft;
     private double _expandedDockTop;
-    private double _expandedDockWidth = 820;
+    private double _expandedDockWidth = 900;
 
     /// <summary>Rule waiting out the settle delay before its layout is loaded.</summary>
     private LayoutRule? _pendingRule;
@@ -66,6 +67,9 @@ public partial class MainWindow : Window
 
     public ICommand AddBrowserCommand { get; }
     public ICommand AddNotesCommand { get; }
+    public ICommand AddChecklistCommand { get; }
+    public ICommand AddTimerCommand { get; }
+    public ICommand AddImageCommand { get; }
     public ICommand ReopenPanelCommand { get; }
     public ICommand SaveLayoutCommand { get; }
     public ICommand MuteAllCommand { get; }
@@ -77,6 +81,9 @@ public partial class MainWindow : Window
 
         AddBrowserCommand = new RelayCommand(() => AddPanel(PanelKind.Browser));
         AddNotesCommand = new RelayCommand(() => AddPanel(PanelKind.Notes));
+        AddChecklistCommand = new RelayCommand(() => AddPanel(PanelKind.Checklist));
+        AddTimerCommand = new RelayCommand(() => AddPanel(PanelKind.Timer));
+        AddImageCommand = new RelayCommand(() => AddPanel(PanelKind.ImagePin));
         ReopenPanelCommand = new RelayCommand(ReopenLastClosedPanel, () => _closedPanels.Count > 0);
         SaveLayoutCommand = new RelayCommand(() => _ = SaveNamedLayoutAsync());
         MuteAllCommand = new RelayCommand(ToggleMuteAll);
@@ -85,6 +92,9 @@ public partial class MainWindow : Window
         // so RelativeSource bindings to the window never resolve.
         InputBindings.Add(new KeyBinding(AddBrowserCommand, Key.B, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(AddNotesCommand, Key.N, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(AddChecklistCommand, Key.K, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(AddTimerCommand, Key.T, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(AddImageCommand, Key.I, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ReopenPanelCommand, Key.T, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(SaveLayoutCommand, Key.S, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(MuteAllCommand, Key.A, ModifierKeys.Control | ModifierKeys.Shift));
@@ -224,6 +234,7 @@ public partial class MainWindow : Window
         RefreshStartupEntry();
         ReportPreviousCrash();
         _ = CheckForUpdatesAsync();
+        _ = SweepPastedImagesAsync();
 
         if (_settings.StartHidden)
         {
@@ -233,6 +244,33 @@ public partial class MainWindow : Window
                 _tray?.ShowHint("DriftDeck is running",
                     $"The overlay started hidden. Press {_settings.VisibilityHotkey} or double-click this icon to show it.");
             }, DispatcherPriority.ContextIdle);
+        }
+    }
+
+    /// <summary>
+    /// Deletes pasted images no layout points at any more. Pasted images are the only files
+    /// DriftDeck owns, and nothing else would ever remove one — closing the panel that held it
+    /// is the last time it is mentioned. Every layout has to be read, not just the current one,
+    /// or a sweep would delete images another layout is still using.
+    /// </summary>
+    private async Task SweepPastedImagesAsync()
+    {
+        try
+        {
+            var referenced = new List<string?>();
+            foreach (var name in _layoutStore.ListNames())
+            {
+                var layout = name.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase)
+                    ? _layout
+                    : await _layoutStore.LoadAsync(name);
+                referenced.AddRange(layout.Panels.Select(panel => panel.ImagePath));
+            }
+
+            await Task.Run(() => _imageStore.RemoveUnreferenced(referenced));
+        }
+        catch (IOException)
+        {
+            // Housekeeping. A failed sweep costs disk space, never correctness.
         }
     }
 
@@ -642,9 +680,14 @@ public partial class MainWindow : Window
         var offset = (_panelHosts.Count % 6) * 28;
         var x = Left + offset;
         var y = Top + ActualHeight + 16 + offset;
-        var definition = kind == PanelKind.Browser
-            ? PanelDefinition.CreateBrowser(x, y)
-            : PanelDefinition.CreateNotes(x, y);
+        var definition = kind switch
+        {
+            PanelKind.Browser => PanelDefinition.CreateBrowser(x, y),
+            PanelKind.Checklist => PanelDefinition.CreateChecklist(x, y),
+            PanelKind.Timer => PanelDefinition.CreateTimer(x, y),
+            PanelKind.ImagePin => PanelDefinition.CreateImagePin(x, y),
+            _ => PanelDefinition.CreateNotes(x, y)
+        };
 
         _layout.Panels.Add(definition);
         AddPanelHost(definition, activate: true);
@@ -1476,6 +1519,12 @@ public partial class MainWindow : Window
     private void AddBrowserButton_OnClick(object sender, RoutedEventArgs e) => AddPanel(PanelKind.Browser);
 
     private void AddNotesButton_OnClick(object sender, RoutedEventArgs e) => AddPanel(PanelKind.Notes);
+
+    private void AddChecklistButton_OnClick(object sender, RoutedEventArgs e) => AddPanel(PanelKind.Checklist);
+
+    private void AddTimerButton_OnClick(object sender, RoutedEventArgs e) => AddPanel(PanelKind.Timer);
+
+    private void AddImageButton_OnClick(object sender, RoutedEventArgs e) => AddPanel(PanelKind.ImagePin);
 
     private void ReopenPanelButton_OnClick(object sender, RoutedEventArgs e) => ReopenLastClosedPanel();
 

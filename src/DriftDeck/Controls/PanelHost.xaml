@@ -4,6 +4,48 @@
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              FontFamily="Segoe UI"
              MinWidth="420" MinHeight="200">
+    <UserControl.Resources>
+        <!-- One checklist row. It binds straight to the persisted ChecklistItem, so ticking a
+             box or editing text updates what gets saved without a copy in between. -->
+        <DataTemplate x:Key="ChecklistItemTemplate">
+            <Grid x:Name="Row" Margin="0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <CheckBox IsChecked="{Binding IsDone}" VerticalAlignment="Center"
+                          AutomationProperties.Name="Done" />
+
+                <TextBox x:Name="ItemText" Grid.Column="1" Margin="6,0,0,0"
+                         Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                         MaxLength="200" Background="Transparent" BorderThickness="0"
+                         Padding="2,3" VerticalContentAlignment="Center"
+                         Foreground="{StaticResource TextBrush}"
+                         KeyDown="ChecklistItemBox_OnKeyDown" />
+
+                <!-- Hidden until the row is pointed at: a delete on every line reads as clutter
+                     on a list whose usual action is ticking a box. -->
+                <Button x:Name="RemoveButton" Grid.Column="2" Style="{StaticResource TitleIconButton}"
+                        Width="24" Content="&#xE711;" Opacity="0" Focusable="False"
+                        Click="ChecklistRemoveButton_OnClick" ToolTip="Remove this item" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                    <Setter TargetName="ItemText" Property="Foreground" Value="{StaticResource MutedBrush}" />
+                    <Setter TargetName="ItemText" Property="TextDecorations" Value="Strikethrough" />
+                </DataTrigger>
+                <Trigger SourceName="ItemText" Property="IsKeyboardFocused" Value="True">
+                    <Setter TargetName="RemoveButton" Property="Opacity" Value="1" />
+                </Trigger>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="RemoveButton" Property="Opacity" Value="1" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Border x:Name="OuterBorder" BorderBrush="{StaticResource StrokeSubtleBrush}" BorderThickness="1"
             CornerRadius="{StaticResource FrameRadius}" Background="{StaticResource SurfaceBaseBrush}">
         <Grid>
@@ -225,6 +267,143 @@
                         <TextBox x:Name="NotesBox" AutomationProperties.Name="Panel notes" Style="{StaticResource NotesTextBox}" AcceptsReturn="True"
                                  AcceptsTab="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                  TextChanged="NotesBox_OnTextChanged" />
+                    </Grid>
+                </Border>
+
+                <!-- Same sunken surface as notes: both are places the user writes into. -->
+                <Border x:Name="ChecklistSurface" Visibility="Collapsed"
+                        Background="{StaticResource SurfaceSunkenBrush}"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <Grid Margin="8,7,6,7">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="ChecklistItems"
+                                          ItemTemplate="{StaticResource ChecklistItemTemplate}" />
+                        </ScrollViewer>
+
+                        <!-- The add box sits under the list, so a new item appears where the
+                             cursor already is rather than jumping to the top. -->
+                        <TextBox x:Name="ChecklistAddBox" Grid.Row="1" Margin="0,6,0,0" MaxLength="200"
+                                 AutomationProperties.Name="Add a checklist item"
+                                 KeyDown="ChecklistAddBox_OnKeyDown"
+                                 ToolTip="Type an item and press Enter" />
+
+                        <Grid Grid.Row="2" Margin="2,6,0,0">
+                            <TextBlock x:Name="ChecklistSummary" VerticalAlignment="Center"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       FontSize="{StaticResource TextXs}" />
+                            <Button x:Name="ChecklistClearDone" Style="{StaticResource GhostButton}"
+                                    Content="Clear done" Height="18" Padding="8,0"
+                                    FontSize="{StaticResource TextXs}" HorizontalAlignment="Right"
+                                    Visibility="Collapsed" Click="ChecklistClearDone_OnClick"
+                                    ToolTip="Remove every ticked item" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="TimerSurface" Visibility="Collapsed"
+                        Background="{StaticResource SurfaceSunkenBrush}"
+                        CornerRadius="{StaticResource ControlRadius}">
+                    <Grid Margin="10,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- The readout is deliberately outside the five-step type scale. It is
+                             the one thing a timer panel exists to show, and it has to be
+                             readable at a glance from across a desk. Its size is set in code so
+                             it tracks the panel's content scale. -->
+                        <TextBlock x:Name="TimerReadout" Text="5:00" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"
+                                   AutomationProperties.Name="Time remaining" />
+
+                        <Grid Grid.Row="1" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="TimerDurationBox" Text="5:00" MaxLength="8"
+                                     AutomationProperties.Name="Timer length"
+                                     KeyDown="TimerDurationBox_OnKeyDown"
+                                     LostFocus="TimerDurationBox_OnLostFocus"
+                                     ToolTip="Length. A plain number is minutes; 90 or 1:30:00 both work." />
+                            <Button x:Name="TimerStartButton" Grid.Column="1" Margin="6,0,0,0" Width="66"
+                                    Content="Start" Click="TimerStartButton_OnClick"
+                                    ToolTip="Start or pause the timer" />
+                            <Button x:Name="TimerResetButton" Grid.Column="2" Margin="4,0,0,0"
+                                    Style="{StaticResource GhostButton}" Content="Reset"
+                                    Click="TimerResetButton_OnClick"
+                                    ToolTip="Back to the full length" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Deep rather than sunken: this surface is a backdrop for a picture, not a
+                     field the user writes into. -->
+                <Border x:Name="ImageSurface" Visibility="Collapsed" AllowDrop="True"
+                        Background="{StaticResource SurfaceDeepBrush}"
+                        CornerRadius="{StaticResource ControlRadius}" ClipToBounds="True"
+                        DragOver="ImageSurface_OnDragOver" Drop="ImageSurface_OnDrop">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Panning falls out of the scroll viewer, so zooming past the panel
+                             edge needs no drag handling of its own. -->
+                        <ScrollViewer x:Name="ImageScroller" HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto">
+                            <Image x:Name="ImageView" Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </ScrollViewer>
+
+                        <StackPanel x:Name="ImageEmptyState" Margin="24" HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock x:Name="ImageEmptyTitle" Text="Drop an image here"
+                                       TextAlignment="Center" FontSize="{StaticResource TextLg}"
+                                       FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Name="ImageEmptyDetail" Margin="0,8,0,0" TextAlignment="Center"
+                                       Text="Or paste one with Ctrl+V, or choose a file."
+                                       FontSize="{StaticResource TextSm}"
+                                       Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                            <Button Content="Choose image" HorizontalAlignment="Center" Margin="0,16,0,0"
+                                    Width="128" Click="ImageChooseButton_OnClick" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1" Margin="8,4,6,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock x:Name="ImageCaption" VerticalAlignment="Center"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       FontSize="{StaticResource TextXs}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button x:Name="ImageReplaceButton" Grid.Column="1"
+                                    Style="{StaticResource GhostButton}" Content="Replace" Height="18"
+                                    Padding="8,0" FontSize="{StaticResource TextXs}"
+                                    Visibility="Collapsed" Click="ImageChooseButton_OnClick"
+                                    ToolTip="Point this panel at a different image" />
+                            <Button x:Name="ImageOpenButton" Grid.Column="2" Margin="4,0,0,0"
+                                    Style="{StaticResource GhostButton}" Content="Open" Height="18"
+                                    Padding="8,0" FontSize="{StaticResource TextXs}"
+                                    Visibility="Collapsed" Click="ImageOpenButton_OnClick"
+                                    ToolTip="Open this file in the default image viewer" />
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
