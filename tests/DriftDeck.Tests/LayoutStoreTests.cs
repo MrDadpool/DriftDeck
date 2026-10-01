@@ -291,7 +291,8 @@ public class LayoutStoreTests : IDisposable
 
         var loaded = await _store.LoadAsync("Racing");
 
-        Assert.Equal(2, loaded.Version);
+        // Migration stamps the current version, which is 3 since RecentUrls was added.
+        Assert.Equal(3, loaded.Version);
         Assert.Equal(94, loaded.Height);
         var panel = Assert.Single(loaded.Panels);
         Assert.Equal(110, panel.X);
