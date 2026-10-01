@@ -48,9 +48,9 @@ Start DriftDeck and use the compact dock to add browser or notes panels. Every p
 
 - `+ WEB` creates a browser panel.
 - `+ NOTES` creates a notes panel.
-- `SEE-THROUGH` changes all panel windows, including their content.
+- `Fade` changes all panel windows, including their content.
 - The speaker button mutes or unmutes every browser panel at once.
-- `_` collapses the dock to a 250 x 21 strip at the bottom-right of its current monitor.
+- `_` collapses the dock to a 340 x 30 strip at the bottom-right of its current monitor.
 - `□` restores a collapsed dock to its exact previous position and size.
 - Closing the dock exits DriftDeck and closes all panels.
 

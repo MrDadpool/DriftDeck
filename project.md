@@ -144,6 +144,29 @@ Every change went through the shared tokens in `App.xaml`, so density stays a si
 tune. The type scale was left alone — 11 px is already the floor, and shrinking text is what
 makes a compact UI unusable rather than dense.
 
+### Visual refresh (Codex, accepted 2026-10-01)
+
+Supersedes the density table above. Roomier controls, a cyan accent (`#72DBED`) replacing teal,
+darker blue surfaces, lighter muted/disabled text, and a `ConsoleHeaderBrush` gradient on the
+dock title strip. The dock toolbar is now two rows: create buttons and fade on top, layout
+controls below.
+
+| | density pass | refresh |
+| --- | --- | --- |
+| Panel title bar | 18 px | 30 px |
+| Panel title buttons | 20 x 16 | 26 x 26 (24 wide in panels) |
+| Shaded panel height | 20 px | 32 px |
+| Dock title strip | 18 px | 30 px |
+| Dock status strip | 16 px | 24 px |
+| **Dock total** | **68 px** | **146 px** |
+| Dock min width | 1016 px | 780 px |
+| Collapsed dock | 250 x 18 | 340 x 30 |
+| Control height | 24 px | 32 px |
+| Icon button | 22 px | 28 px |
+
+`scripts/check-ui.py` statically checks resource keys, event handlers, and that the dock and
+shaded-panel constants in code match the XAML. Run it after any metric change.
+
 ## Keyboard
 
 | Action | Shortcut |
@@ -320,11 +343,11 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
      short panel and that Escape and clicking another panel both close it
    - `Ctrl+Shift+C` on a notes panel, and that it is still DevTools inspect on a browser panel
    - the gather button against a panel dragged off-screen, and with a dock parked at the bottom
-   - the dock at its new 1016 minimum width, on the smallest display in use
+   - the refreshed dock (146 px tall, two-row toolbar) at its 780 minimum width, on the
+     smallest display in use, and that collapse/restore still lands on the 340 x 30 strip
    - hide and restore the overlay — `TrySuspendAsync` has a visibility precondition, and
      collapsing the control to satisfy it is the least certain call in the batch
    - `Ctrl+Shift+M` against `Ctrl+M`, to confirm WPF input-binding precedence
-   - the dock at its new 990 minimum width, on the smallest display in use
    - the Settings window with three sections added — it is `SizeToContent="Height"` under a
      `MaxHeight`, so it should scroll rather than clip
    - unplug a monitor with panels on it, and resume from sleep

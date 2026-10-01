@@ -14,10 +14,10 @@ namespace DriftDeck;
 
 public partial class MainWindow : Window
 {
-    private const double DockHeight = 68;
-    private const double DockMinWidth = 1016;
-    private const double CollapsedWidth = 250;
-    private const double CollapsedHeight = 18;
+    private const double DockHeight = 146;
+    private const double DockMinWidth = 780;
+    private const double CollapsedWidth = 340;
+    private const double CollapsedHeight = 30;
 
     private readonly LayoutStore _layoutStore = new();
     private readonly SettingsStore _settingsStore = new();
@@ -52,7 +52,7 @@ public partial class MainWindow : Window
     private bool _muteAll;
     private double _expandedDockLeft;
     private double _expandedDockTop;
-    private double _expandedDockWidth = 1020;
+    private double _expandedDockWidth = 820;
 
     /// <summary>Rule waiting out the settle delay before its layout is loaded.</summary>
     private LayoutRule? _pendingRule;

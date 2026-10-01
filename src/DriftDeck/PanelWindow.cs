@@ -13,7 +13,7 @@ public sealed class PanelWindow : Window
 {
     private const int WmSizing = 0x0214;
     /// <summary>Title strip plus the frame's top and bottom border.</summary>
-    private const double ShadedHeight = 20;
+    private const double ShadedHeight = 32;
 
     private OverlayWindowService? _windowService;
     private HwndSource? _source;

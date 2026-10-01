@@ -1,4 +1,4 @@
-﻿<Application x:Class="DriftDeck.App"
+<Application x:Class="DriftDeck.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sys="clr-namespace:System;assembly=System.Runtime"
@@ -11,33 +11,33 @@
              Nothing paints with an inline hex. -->
 
         <!-- Surfaces, darkest to lightest. Elevation is carried by lightness, never shadow. -->
-        <Color x:Key="SurfaceDeepColor">#FA0E141A</Color>
-        <Color x:Key="SurfaceSunkenColor">#FF11171D</Color>
-        <Color x:Key="SurfaceStatusColor">#F2141C24</Color>
-        <Color x:Key="SurfaceBaseColor">#F2182028</Color>
-        <Color x:Key="SurfaceTitleColor">#F21A232C</Color>
-        <Color x:Key="SurfaceRaisedColor">#FF222D38</Color>
-        <Color x:Key="SurfaceActiveColor">#FF2A3947</Color>
-        <Color x:Key="SurfacePressedColor">#FF141C24</Color>
-        <Color x:Key="SurfacePopupColor">#FA141C24</Color>
+        <Color x:Key="SurfaceDeepColor">#FC090F16</Color>
+        <Color x:Key="SurfaceSunkenColor">#FF0C141E</Color>
+        <Color x:Key="SurfaceStatusColor">#FC101C28</Color>
+        <Color x:Key="SurfaceBaseColor">#FA111D29</Color>
+        <Color x:Key="SurfaceTitleColor">#FC142433</Color>
+        <Color x:Key="SurfaceRaisedColor">#FF1C3040</Color>
+        <Color x:Key="SurfaceActiveColor">#FF244657</Color>
+        <Color x:Key="SurfacePressedColor">#FF102330</Color>
+        <Color x:Key="SurfacePopupColor">#FF122230</Color>
 
         <!-- Accent. Reserved for state that changed: focus, active panel, success, checked. -->
-        <Color x:Key="AccentColor">#FF4DE3C1</Color>
-        <Color x:Key="AccentDimColor">#FF2E8B78</Color>
-        <Color x:Key="AccentSoftColor">#332E8B78</Color>
-        <Color x:Key="AccentPillColor">#304DE3C1</Color>
+        <Color x:Key="AccentColor">#FF72DBED</Color>
+        <Color x:Key="AccentDimColor">#FF43899A</Color>
+        <Color x:Key="AccentSoftColor">#3343899A</Color>
+        <Color x:Key="AccentPillColor">#3072DBED</Color>
 
         <Color x:Key="WarnColor">#FFF3B54A</Color>
         <Color x:Key="WarnPillColor">#38F3B54A</Color>
         <Color x:Key="DangerColor">#FFFF8C78</Color>
 
-        <Color x:Key="StrokeColor">#FF3A4A57</Color>
-        <Color x:Key="StrokeSubtleColor">#805A7180</Color>
+        <Color x:Key="StrokeColor">#FF375264</Color>
+        <Color x:Key="StrokeSubtleColor">#FF2D4253</Color>
         <Color x:Key="ScrimColor">#66000000</Color>
 
         <Color x:Key="TextColor">#FFF2F7F8</Color>
-        <Color x:Key="MutedColor">#FF9BA9B2</Color>
-        <Color x:Key="DisabledColor">#FF5C6A75</Color>
+        <Color x:Key="MutedColor">#FFACBDC9</Color>
+        <Color x:Key="DisabledColor">#FF7D909E</Color>
 
         <SolidColorBrush x:Key="SurfaceDeepBrush" Color="{StaticResource SurfaceDeepColor}" />
         <SolidColorBrush x:Key="SurfaceSunkenBrush" Color="{StaticResource SurfaceSunkenColor}" />
@@ -62,18 +62,24 @@
         <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}" />
         <SolidColorBrush x:Key="DisabledBrush" Color="{StaticResource DisabledColor}" />
 
+        <!-- A quiet directional sheen gives the dock its instrument-panel finish. -->
+        <LinearGradientBrush x:Key="ConsoleHeaderBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="{StaticResource SurfaceActiveColor}" Offset="0" />
+            <GradientStop Color="{StaticResource SurfaceTitleColor}" Offset="0.7" />
+        </LinearGradientBrush>
+
         <!-- ==================== Type scale ====================
              Five steps. Floor is 11 — nothing in the UI reads below it. -->
         <sys:Double x:Key="TextXs">11</sys:Double>
         <sys:Double x:Key="TextSm">12</sys:Double>
         <sys:Double x:Key="TextMd">13</sys:Double>
         <sys:Double x:Key="TextLg">15</sys:Double>
-        <sys:Double x:Key="TextXl">20</sys:Double>
+        <sys:Double x:Key="TextXl">26</sys:Double>
 
         <!-- ==================== Metrics ==================== -->
-        <sys:Double x:Key="ControlHeight">24</sys:Double>
-        <sys:Double x:Key="IconButtonSize">22</sys:Double>
-        <sys:Double x:Key="IconGlyphSize">11</sys:Double>
+        <sys:Double x:Key="ControlHeight">32</sys:Double>
+        <sys:Double x:Key="IconButtonSize">28</sys:Double>
+        <sys:Double x:Key="IconGlyphSize">12</sys:Double>
         <CornerRadius x:Key="ControlRadius">4</CornerRadius>
         <CornerRadius x:Key="FrameRadius">7</CornerRadius>
 
@@ -116,6 +122,7 @@
             <Setter Property="Height" Value="{StaticResource ControlHeight}" />
             <Setter Property="FontSize" Value="{StaticResource TextSm}" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="Template">
@@ -131,7 +138,7 @@
                                     CornerRadius="{StaticResource ControlRadius}" />
                             <Border x:Name="FocusRing" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
                                     CornerRadius="{StaticResource ControlRadius}" Margin="-2" Opacity="0" />
-                            <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            <ContentPresenter x:Name="Content" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" />
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -223,8 +230,8 @@
 
         <!-- Icon button on the title strips, which are shorter than a toolbar row. -->
         <Style x:Key="TitleIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-            <Setter Property="Width" Value="20" />
-            <Setter Property="Height" Value="16" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
@@ -279,7 +286,7 @@
             <Setter Property="VerticalContentAlignment" Value="Top" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Padding" Value="16,14" />
             <Setter Property="FontSize" Value="{StaticResource TextMd}" />
             <Setter Property="Template">
                 <Setter.Value>

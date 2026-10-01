@@ -6,8 +6,8 @@ public sealed class OverlayLayout
     public string Name { get; set; } = "Default";
     public double Left { get; set; } = 80;
     public double Top { get; set; } = 80;
-    public double Width { get; set; } = 980;
-    public double Height { get; set; } = 94;
+    public double Width { get; set; } = 820;
+    public double Height { get; set; } = 146;
     public double Opacity { get; set; } = 0.98;
     public List<PanelDefinition> Panels { get; set; } = [];
 
@@ -23,8 +23,8 @@ public sealed class OverlayLayout
         Version = 3,
         Panels =
         [
-            PanelDefinition.CreateBrowser(80, 170),
-            PanelDefinition.CreateNotes(670, 170)
+            PanelDefinition.CreateBrowser(80, 246),
+            PanelDefinition.CreateNotes(670, 246)
         ]
     };
 }

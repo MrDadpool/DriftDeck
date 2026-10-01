@@ -1,14 +1,14 @@
-﻿<UserControl x:Class="DriftDeck.Controls.PanelHost"
+<UserControl x:Class="DriftDeck.Controls.PanelHost"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              FontFamily="Segoe UI"
-             MinWidth="360" MinHeight="200">
+             MinWidth="420" MinHeight="200">
     <Border x:Name="OuterBorder" BorderBrush="{StaticResource StrokeSubtleBrush}" BorderThickness="1"
             CornerRadius="{StaticResource FrameRadius}" Background="{StaticResource SurfaceBaseBrush}">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="18" />
+                <RowDefinition Height="30" />
                 <RowDefinition x:Name="ToolbarRow" Height="Auto" />
                 <RowDefinition x:Name="ContentRow" Height="*" />
             </Grid.RowDefinitions>
@@ -31,7 +31,7 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Neutral until the panel is the active one; accent means state, not decoration. -->
-                    <Rectangle x:Name="KindStripe" Width="2" Height="9" Fill="{StaticResource StrokeSubtleBrush}"
+                    <Rectangle x:Name="KindStripe" Width="3" Height="14" Fill="{StaticResource StrokeSubtleBrush}"
                                RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
 
                     <Grid Grid.Column="1" Margin="7,0,6,0">
@@ -39,52 +39,52 @@
                                    FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                    ToolTip="Double-click to rename this panel"
                                    MouseLeftButtonDown="TitleText_OnMouseLeftButtonDown" />
-                        <TextBox x:Name="TitleEditBox" Visibility="Collapsed" Height="16"
+                        <TextBox x:Name="TitleEditBox" Visibility="Collapsed" Height="26"
                                  FontSize="{StaticResource TextXs}" Padding="4,0"
                                  KeyDown="TitleEditBox_OnKeyDown" LostFocus="TitleEditBox_OnLostFocus" />
                     </Grid>
 
-                    <Button Grid.Column="2" Style="{StaticResource TitleIconButton}" Width="18" Content="&#xE738;"
+                    <Button Grid.Column="2" Style="{StaticResource TitleIconButton}" Width="24" Content="&#xE738;"
                             Click="ZoomOutButton_OnClick" ToolTip="Smaller content (Ctrl+-)" />
                     <TextBlock x:Name="ContentScaleText" Grid.Column="3" Text="100%" Width="32" TextAlignment="Center"
                                VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"
                                FontSize="{StaticResource TextXs}" Cursor="Hand"
                                ToolTip="Content scale. Click to reset to 100%."
                                MouseLeftButtonDown="ContentScaleText_OnMouseLeftButtonDown" />
-                    <Button Grid.Column="4" Style="{StaticResource TitleIconButton}" Width="18" Content="&#xE710;"
+                    <Button Grid.Column="4" Style="{StaticResource TitleIconButton}" Width="24" Content="&#xE710;"
                             Click="ZoomInButton_OnClick" ToolTip="Larger content (Ctrl++)" />
 
-                    <Slider x:Name="OpacitySlider" Grid.Column="5" Width="56" Height="16" Margin="7,0,3,0"
+                    <Slider x:Name="OpacitySlider" Grid.Column="5" Width="56" Height="26" Margin="7,0,3,0"
                             Minimum="0.35" Maximum="1" ValueChanged="OpacitySlider_OnValueChanged"
                             AutomationProperties.AutomationId="PanelOpacitySlider"
                             AutomationProperties.Name="Panel opacity"
                             ToolTip="Opacity for this panel only" />
 
                     <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="CopyNotesButton" Style="{StaticResource TitleIconButton}" Width="18"
+                        <Button x:Name="CopyNotesButton" Style="{StaticResource TitleIconButton}" Width="24"
                                 AutomationProperties.AutomationId="PanelCopyNotesButton"
                                 Visibility="Collapsed" Content="&#xF0E3;" Click="CopyNotesButton_OnClick"
                                 ToolTip="Copy these notes to the clipboard (Ctrl+Shift+C)" />
-                        <Button x:Name="DuplicateButton" Style="{StaticResource TitleIconButton}" Width="18"
+                        <Button x:Name="DuplicateButton" Style="{StaticResource TitleIconButton}" Width="24"
                                 AutomationProperties.AutomationId="PanelDuplicateButton"
                                 Content="&#xE8C8;" Click="DuplicateButton_OnClick"
                                 ToolTip="Duplicate this panel (Ctrl+D)" />
-                        <Button x:Name="LockButton" Style="{StaticResource TitleIconButton}" Width="18"
+                        <Button x:Name="LockButton" Style="{StaticResource TitleIconButton}" Width="24"
                                 AutomationProperties.AutomationId="PanelLockButton"
                                 Content="&#xE785;" Click="LockButton_OnClick"
                                 ToolTip="Lock this panel in place (Ctrl+Shift+L)" />
-                        <Button x:Name="ShadeButton" Style="{StaticResource TitleIconButton}" Width="18"
+                        <Button x:Name="ShadeButton" Style="{StaticResource TitleIconButton}" Width="24"
                                 AutomationProperties.AutomationId="PanelShadeButton"
                                 Content="&#xE70E;" Click="ShadeButton_OnClick"
                                 ToolTip="Roll up to the title bar (Ctrl+M)" />
-                        <Button Style="{StaticResource TitleIconButton}" Width="18" Content="&#xE8BB;"
+                        <Button Style="{StaticResource TitleIconButton}" Width="24" Content="&#xE8BB;"
                                 Click="CloseButton_OnClick" ToolTip="Close this panel (Ctrl+W)" />
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- ================= Browser toolbar ================= -->
-            <Grid x:Name="BrowserToolbar" Grid.Row="1" Margin="6,6,6,0">
+            <Grid x:Name="BrowserToolbar" Grid.Row="1" Margin="8,8,8,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -105,7 +105,7 @@
                             ToolTip="Mute this panel's audio (Ctrl+Shift+M)" />
                 </StackPanel>
 
-                <TextBox x:Name="AddressBox" Grid.Column="1" KeyDown="AddressBox_OnKeyDown"
+                <TextBox x:Name="AddressBox" Grid.Column="1" AutomationProperties.Name="Web address" KeyDown="AddressBox_OnKeyDown"
                          GotKeyboardFocus="AddressBox_OnGotKeyboardFocus" ToolTip="Address (Ctrl+L)" />
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
@@ -187,7 +187,7 @@
                                                     Content="{Binding Label}" ToolTip="{Binding Url}"
                                                     Click="BookmarkItem_OnClick" />
                                             <Button Grid.Column="1" Style="{StaticResource TitleIconButton}"
-                                                    Width="18" Content="&#xE8BB;" VerticalAlignment="Center"
+                                                    Width="24" Content="&#xE8BB;" VerticalAlignment="Center"
                                                     Click="RemoveBookmarkButton_OnClick"
                                                     ToolTip="Remove this bookmark" />
                                         </Grid>
@@ -219,10 +219,10 @@
                         CornerRadius="{StaticResource ControlRadius}">
                     <Grid>
                         <TextBlock x:Name="NotesPlaceholder" Text="Type notes here. They save automatically."
-                                   Margin="13,11,0,0" Foreground="{StaticResource MutedBrush}"
+                                   Margin="17,15,0,0" Foreground="{StaticResource MutedBrush}"
                                    FontSize="{StaticResource TextMd}" IsHitTestVisible="False"
                                    VerticalAlignment="Top" />
-                        <TextBox x:Name="NotesBox" Style="{StaticResource NotesTextBox}" AcceptsReturn="True"
+                        <TextBox x:Name="NotesBox" AutomationProperties.Name="Panel notes" Style="{StaticResource NotesTextBox}" AcceptsReturn="True"
                                  AcceptsTab="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                  TextChanged="NotesBox_OnTextChanged" />
                     </Grid>
