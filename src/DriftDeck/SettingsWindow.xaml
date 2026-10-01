@@ -277,15 +277,17 @@
                         <TextBlock Text="UPDATES" Style="{StaticResource GroupLabel}"
                                    Foreground="{StaticResource AccentBrush}" />
                         <CheckBox x:Name="CheckForUpdatesCheckBox" Margin="0,10,0,0"
-                                  Content="Check GitHub for a newer release when DriftDeck starts" />
+                                  Content="Tell me when a newer release is published" />
                         <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
-                                   Text="An anonymous request for the public release list. Nothing about you or the applications you run is sent, and nothing installs itself: DriftDeck ships as a portable folder, so an update means downloading the new one." />
+                                   Text="An anonymous read of the public release list on GitHub. Nothing about you or the applications you run is sent. Nothing downloads until you choose Update and restart, and DriftDeck never restarts on its own." />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                             <Button x:Name="CheckNowButton" Style="{StaticResource GhostButton}" Content="Check now"
                                     Width="110" Click="CheckNowButton_OnClick" />
-                            <Button Style="{StaticResource GhostButton}" Content="Open releases" Width="130"
-                                    Margin="6,0,0,0" Click="OpenReleasesButton_OnClick" />
+                            <Button x:Name="UpdateNowButton" Style="{StaticResource AccentButton}"
+                                    Content="Update and restart" Width="150" Margin="6,0,0,0"
+                                    Visibility="Collapsed" Click="UpdateNowButton_OnClick"
+                                    ToolTip="Downloads the update, closes DriftDeck, installs it, and starts it again. Unsaved changes on this page are discarded." />
                             <Button Style="{StaticResource GhostButton}" Content="Open log folder" Width="140"
                                     Margin="6,0,0,0" Click="OpenLogsButton_OnClick"
                                     ToolTip="Crash reports are written here and never sent anywhere" />

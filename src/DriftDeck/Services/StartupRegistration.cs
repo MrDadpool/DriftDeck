@@ -8,7 +8,7 @@ namespace DriftDeck.Services;
 /// An overlay you have to remember to launch is an overlay you forget, and the app it belongs
 /// over is usually started from somewhere else entirely. The per-user key was chosen over a
 /// Startup-folder shortcut because it needs no COM shell interop to create, and over any
-/// machine-wide key because DriftDeck is a portable folder owned by one user and must never
+/// machine-wide key because DriftDeck is a per-user install and must never
 /// need elevation.
 /// </para>
 /// <para>
@@ -53,7 +53,8 @@ public static class StartupRegistration
 
     /// <summary>
     /// True when the registered command no longer names this executable, which is what happens
-    /// when a portable folder is moved or renamed. The entry then silently launches nothing.
+    /// when the entry was written by a build run from somewhere else — a source build, or an
+    /// install since moved. The entry then silently launches nothing.
     /// </summary>
     public static bool IsStale
     {

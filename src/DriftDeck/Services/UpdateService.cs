@@ -1,125 +1,80 @@
-using System.Diagnostics;
-using System.Net.Http;
-using System.Net.Http.Json;
 using System.Reflection;
-using System.Text.Json.Serialization;
+using Velopack;
+using Velopack.Sources;
 
 namespace DriftDeck.Services;
 
 /// <summary>A newer published release than the one running.</summary>
-public sealed record UpdateInfo(string Tag, Version Version, string ReleaseUrl);
+public sealed record UpdateInfo(string Tag, Version Version, Velopack.UpdateInfo Package);
 
 /// <summary>
-/// Asks GitHub once per launch whether a newer release exists.
+/// Finds, downloads, and applies updates through Velopack, reading the public GitHub releases.
 /// <para>
-/// The check is a plain anonymous GET of the public releases endpoint. Nothing about the user,
-/// the machine, or the applications DriftDeck is running over is sent, and the request carries
-/// no identifier beyond the User-Agent GitHub requires. DriftDeck ships as a portable folder
-/// with no installer, so an update is never applied silently: the user is told, and the release
-/// page opens in their browser if they ask for it.
+/// The check is an anonymous read of the public release feed. Nothing about the user, the
+/// machine, or the applications DriftDeck is running over is sent. Every step past the check is
+/// the user's call: nothing downloads until they ask, and DriftDeck only restarts when they press
+/// the button that says so — an overlay that restarts itself mid-game is worse than an old one.
+/// </para>
+/// <para>
+/// A build run from source, or any copy not installed by Setup, has no Velopack install to update,
+/// so every method reports "no update" there rather than failing.
 /// </para>
 /// </summary>
-public sealed class UpdateService : IDisposable
+public sealed class UpdateService
 {
     public const string Repository = "MrDadpool/DriftDeck";
-    public const string ReleasesPageUrl = $"https://github.com/{Repository}/releases/latest";
+    public const string RepositoryUrl = $"https://github.com/{Repository}";
 
-    private static readonly Uri LatestReleaseApi =
-        new($"https://api.github.com/repos/{Repository}/releases/latest");
-
-    private readonly HttpClient _client;
-    private bool _disposed;
-
-    public UpdateService()
-    {
-        _client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd($"DriftDeck/{CurrentVersion}");
-        _client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-    }
+    private readonly UpdateManager _manager =
+        new(new GithubSource(RepositoryUrl, accessToken: null, prerelease: false));
 
     /// <summary>The running build, taken from the assembly so the csproj stays the single source.</summary>
     public static Version CurrentVersion =>
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
+    /// <summary>False for a build that Setup did not install, which has nothing to update.</summary>
+    public bool IsInstalled => _manager.IsInstalled;
+
     /// <summary>
-    /// Returns the newer release, or null when the build is current, the tag is unreadable, or
-    /// the network is unavailable. A failed check is never surfaced as an error: the user did
-    /// not ask for it, and an overlay must not interrupt a game to report that GitHub was slow.
+    /// Returns the newer release, or null when the build is current, not installed, or the
+    /// network is unavailable. A failed check is never surfaced as an error: the user did not ask
+    /// for it, and an overlay must not interrupt a game to report that GitHub was slow.
     /// </summary>
-    public async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken = default)
+    public async Task<UpdateInfo?> CheckAsync()
     {
+        if (!_manager.IsInstalled)
+        {
+            return null;
+        }
+
         try
         {
-            var release = await _client.GetFromJsonAsync<GitHubRelease>(LatestReleaseApi, cancellationToken);
-            if (release is null || release.Draft || release.Prerelease || string.IsNullOrWhiteSpace(release.TagName))
+            var package = await _manager.CheckForUpdatesAsync();
+            if (package is null || package.IsDowngrade)
             {
                 return null;
             }
 
-            if (!TryParseTag(release.TagName, out var version) || version <= CurrentVersion)
-            {
-                return null;
-            }
-
-            var url = string.IsNullOrWhiteSpace(release.HtmlUrl) ? ReleasesPageUrl : release.HtmlUrl;
-            return new UpdateInfo(release.TagName, version, url);
+            var version = package.TargetFullRelease.Version;
+            return new UpdateInfo($"v{version}", new Version(version.Major, version.Minor, version.Patch), package);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException
-                                              or NotSupportedException or System.Text.Json.JsonException)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
+            // Velopack surfaces network, feed, and rate-limit failures as assorted exception
+            // types. All of them mean the same thing here: no update to offer right now.
             return null;
         }
     }
 
-    /// <summary>Accepts the usual <c>v1.2.3</c> release tag as well as a bare <c>1.2.3</c>.</summary>
-    public static bool TryParseTag(string tag, out Version version)
-    {
-        var trimmed = tag.Trim().TrimStart('v', 'V');
-        var cut = trimmed.IndexOfAny(['-', '+']);
-        if (cut >= 0)
-        {
-            trimmed = trimmed[..cut];
-        }
+    /// <summary>Downloads the release, reporting progress from 0 to 100.</summary>
+    public Task DownloadAsync(UpdateInfo update, Action<int>? progress, CancellationToken cancellationToken = default) =>
+        _manager.DownloadUpdatesAsync(update.Package, progress, cancellationToken);
 
-        return Version.TryParse(trimmed, out version!);
-    }
-
-    /// <summary>Hands the release page to the default browser. DriftDeck never installs anything itself.</summary>
-    public static void OpenReleasePage(string url)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            // No default browser is registered. Nothing useful is left to try.
-        }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _client.Dispose();
-    }
-
-    private sealed class GitHubRelease
-    {
-        [JsonPropertyName("tag_name")]
-        public string TagName { get; set; } = string.Empty;
-
-        [JsonPropertyName("html_url")]
-        public string HtmlUrl { get; set; } = string.Empty;
-
-        [JsonPropertyName("draft")]
-        public bool Draft { get; set; }
-
-        [JsonPropertyName("prerelease")]
-        public bool Prerelease { get; set; }
-    }
+    /// <summary>
+    /// Hands a downloaded release to Velopack's updater, which waits for DriftDeck to exit, swaps
+    /// in the new version, and starts it again. The caller then closes the app the ordinary way, so
+    /// the layout is saved and the session is marked as a clean exit before the files change.
+    /// </summary>
+    public void ApplyAfterExit(UpdateInfo update) =>
+        _manager.WaitExitThenApplyUpdates(update.Package.TargetFullRelease, silent: false, restart: true);
 }

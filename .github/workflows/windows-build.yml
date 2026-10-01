@@ -33,22 +33,26 @@ jobs:
       - name: Test
         run: dotnet test .\DriftDeck.slnx --configuration Release --no-build
 
-      - name: Create portable Windows build
+      - name: Build installer
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # Tag builds stamp their version into the executable, so a released build can tell
-          # whether a newer release exists. Untagged builds keep the csproj version.
+          # Tag builds stamp the tag into the executable and package, and build a delta against
+          # the previous release. Other builds get a CI pre-release version so an installed CI
+          # build never looks newer than, or equal to, a real release.
           if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
-            .\scripts\Build-Portable.ps1 -Version "${{ github.ref_name }}"
+            .\scripts\Build-Installer.ps1 -Version "${{ github.ref_name }}" -WithDelta
           } else {
-            .\scripts\Build-Portable.ps1
+            $base = ([xml](Get-Content .\src\DriftDeck\DriftDeck.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+            .\scripts\Build-Installer.ps1 -Version "$base-ci.${{ github.run_number }}"
           }
 
-      - name: Upload portable build
+      - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: DriftDeck-win-x64
-          path: artifacts/DriftDeck-win-x64.zip
+          name: DriftDeck-installer
+          path: artifacts/releases
           if-no-files-found: error
 
   release:
@@ -59,20 +63,43 @@ jobs:
       contents: write
 
     steps:
-      - name: Download portable build
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download installer
         uses: actions/download-artifact@v8
         with:
-          name: DriftDeck-win-x64
-          path: artifacts
+          name: DriftDeck-installer
+          path: artifacts/releases
 
-      - name: Publish GitHub Release asset
+      - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes --title "DriftDeck ${{ github.ref_name }}"
-          }
-          gh release upload "${{ github.ref_name }}" ".\artifacts\DriftDeck-win-x64.zip" --repo "${{ github.repository }}" --clobber
+          # Release notes are this version's section of CHANGELOG.md.
+          $tag = "${{ github.ref_name }}"
+          $changelog = Get-Content .\CHANGELOG.md -Raw
+          $pattern = "(?ms)^## $([regex]::Escape($tag))\b.*?$(?<body>.*?)(?=^## |\z)"
+          $notes = if ($changelog -match $pattern) { $Matches.body.Trim() } else { "DriftDeck $tag" }
+          Set-Content -LiteralPath .\artifacts\release-notes.md -Value $notes -Encoding utf8
 
+          # Keep in step with the Velopack package version in src/DriftDeck/DriftDeck.csproj.
+          dotnet tool update vpk --version 1.2.161 --tool-path .\artifacts\tools
+          if ($LASTEXITCODE -ne 0) { throw "Installing vpk failed with exit code $LASTEXITCODE." }
+
+          & .\artifacts\tools\vpk.exe upload github `
+            --repoUrl "https://github.com/${{ github.repository }}" `
+            --token $env:GH_TOKEN `
+            --outputDir .\artifacts\releases `
+            --tag $tag `
+            --releaseName "DriftDeck $tag" `
+            --publish true
+          if ($LASTEXITCODE -ne 0) { throw "vpk upload failed with exit code $LASTEXITCODE." }
+
+          gh release edit $tag --repo "${{ github.repository }}" --notes-file .\artifacts\release-notes.md

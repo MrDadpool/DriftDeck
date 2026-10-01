@@ -19,7 +19,7 @@ DriftDeck does not read game memory or files, hook rendering, inject code, autom
 - Per-application layout rules that load the right layout when you switch to a game
 - First-run tour covering pass-through, the global shortcuts, and the first panels
 - Recovery notice and a local crash log when a session ends unexpectedly
-- Optional startup check for a newer GitHub release
+- One-click installer with in-app updates you approve: nothing downloads or restarts unasked
 - Layout copy, confirmed deletion, and export or import of every layout as one file
 - Automatic recovery when a monitor is disconnected, rescaled, or the machine resumes
 - A plain warning when an application is in exclusive fullscreen, instead of an invisible overlay
@@ -161,17 +161,17 @@ DriftDeck writes the current layout within about 650 ms of every change, so an i
 
 ### Updates
 
-DriftDeck can ask GitHub for the latest published release when it starts, and says so in the status strip and the tray if a newer one exists. The request is anonymous and carries nothing about you or the applications you run; turn it off under `SETTINGS`. Because DriftDeck ships as a portable folder, updating means downloading the new ZIP — nothing installs or replaces itself.
+DriftDeck can ask GitHub for the latest published release when it starts, and says so in the status strip and the tray if a newer one exists. The request is anonymous and carries nothing about you or the applications you run; turn it off under `SETTINGS`. Nothing downloads until you choose **Update and restart** in `SETTINGS`, which fetches the update, closes DriftDeck the normal way so your layout is saved, installs it, and starts the new version. DriftDeck never restarts on its own.
 
 Layouts and settings are stored under `%LOCALAPPDATA%\DriftDeck`. Browser panels share one WebView2 profile under `%LOCALAPPDATA%\DriftDeck\webview2`, so a sign-in in one panel is available in the next and several panels cost far less memory than one browser process each. WebView2 manages those cookies and credentials itself; DriftDeck does not write them into layout JSON files.
 
 ## Compatibility and limitations
 
-- Releases are not code-signed. Windows SmartScreen will warn the first time you run `DriftDeck.exe`; choose **More info**, then **Run anyway**. Download only from the [releases page](https://github.com/MrDadpool/DriftDeck/releases).
+- Releases are not code-signed. Windows SmartScreen will warn the first time you run the installer; choose **More info**, then **Run anyway**. Download only from the [releases page](https://github.com/MrDadpool/DriftDeck/releases).
 - Windows 10 version 2004 (build 19041) or later is required.
 - Borderless-windowed mode is recommended for games.
 - Exclusive fullscreen may prevent ordinary desktop overlays from appearing. DriftDeck detects this and says so rather than failing silently.
-- Microsoft Edge WebView2 Runtime is required and is normally present on supported Windows systems.
+- Microsoft Edge WebView2 Runtime is required. The installer adds it if it is missing.
 - Website playback, sign-in, autoplay, and DRM support depend on the provider and WebView2 policies.
 - DriftDeck does not guarantee compatibility with every game, graphics driver, HDR configuration, or third-party overlay.
 
@@ -189,19 +189,25 @@ dotnet build .\DriftDeck.slnx --configuration Debug
 dotnet run --project .\src\DriftDeck\DriftDeck.csproj
 ```
 
-## Portable Windows build
+## Installing
 
-Create the same portable ZIP published by GitHub Actions:
+Download `DriftDeck.App-win-Setup.exe` from the [releases page](https://github.com/MrDadpool/DriftDeck/releases) and run it. It installs for the current user only, with no administrator prompt, into `%LOCALAPPDATA%\DriftDeck.App`, adds Start menu and desktop shortcuts, and starts DriftDeck. Uninstall from **Settings > Apps**.
+
+Your layouts, settings, logs, and browser profile live separately in `%LOCALAPPDATA%\DriftDeck`, so updating or uninstalling never touches them. Delete that folder by hand to remove them as well.
+
+## Building the installer
+
+Create the same installer GitHub Actions builds:
 
 ```powershell
-.\scripts\Build-Portable.ps1
+.\scripts\Build-Installer.ps1
 ```
 
-The default output is `artifacts\DriftDeck-win-x64.zip`. It is a self-contained x64 build: users extract it and run `DriftDeck.exe` without installing the .NET runtime. Use `-FrameworkDependent` to create a smaller build that requires the .NET 10 desktop runtime.
+The output in `artifacts\releases` is a self-contained x64 build packaged with [Velopack](https://velopack.io): `Setup.exe` plus the update packages a release publishes. `-Version` overrides the csproj version; `-WithDelta` downloads the latest published release first so a delta update can be built against it.
 
 ## GitHub builds and releases
 
-The workflow at `.github/workflows/windows-build.yml` builds pull requests and pushes to `main`, then uploads the portable ZIP as a workflow artifact.
+The workflow at `.github/workflows/windows-build.yml` builds pull requests and pushes to `main`, runs the tests, then uploads the installer as the `DriftDeck-installer` workflow artifact. Non-release builds are versioned `<csproj version>-ci.<run>`, so an installed CI build never outranks a real release.
 
 Pushing a version tag creates or updates a GitHub Release:
 
@@ -210,9 +216,9 @@ git tag v0.3.0
 git push origin v0.3.0
 ```
 
-A tagged build stamps the tag into the executable version, so a released build can tell whether a newer release exists. Keep `<Version>` in `src/DriftDeck/DriftDeck.csproj` in step with the tag you intend to publish.
+A tagged build stamps the tag into the executable and package version, so a released build can tell whether a newer release exists. Keep `<Version>` in `src/DriftDeck/DriftDeck.csproj` in step with the tag you intend to publish.
 
-The workflow attaches `DriftDeck-win-x64.zip` to that release. This directory has not been initialized or pushed by the development assistant; repository creation and the initial push remain owner actions.
+The release job publishes the installer and update packages with `vpk upload github` and uses that version's section of `CHANGELOG.md` as the release notes.
 
 ## Project structure
 
@@ -222,7 +228,7 @@ src/DriftDeck/                  WPF application
   Models/                      Persisted settings and layout models
   Services/                    Hotkeys, persistence, and Win32 window behavior
 .github/workflows/             GitHub build and release automation
-scripts/Build-Portable.ps1     Reproducible portable publisher
+scripts/Build-Installer.ps1    Reproducible installer build (Velopack)
 SC_Overlay.md                  Original product brief
 ```
 

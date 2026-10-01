@@ -328,8 +328,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// One anonymous request to the public release list, and only ever a notice: DriftDeck is a
-    /// portable folder with no installer, so it must not replace itself behind the user's back.
+    /// One anonymous read of the public release feed, and only ever a notice. Downloading and
+    /// restarting are left to the user in Settings: an overlay must not replace itself mid-game.
     /// </summary>
     private async Task CheckForUpdatesAsync()
     {
@@ -338,8 +338,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        using var updates = new UpdateService();
-        var update = await updates.CheckAsync();
+        var update = await new UpdateService().CheckAsync();
         if (update is null || update.Tag == _settings.DismissedUpdateTag)
         {
             return;
@@ -355,9 +354,9 @@ public partial class MainWindow : Window
             // Worst case the same version is announced again next launch.
         }
 
-        SetStatus($"DriftDeck {update.Tag} is available. Settings has the download link.", StatusKind.Info);
+        SetStatus($"DriftDeck {update.Tag} is available. Settings can install it.", StatusKind.Info);
         _tray?.ShowHint("DriftDeck update available",
-            $"{update.Tag} has been published. Open Settings to download it.");
+            $"{update.Tag} has been published. Open Settings and choose Update and restart.");
     }
 
     // ============================ Per-application layouts ============================
@@ -1121,7 +1120,7 @@ public partial class MainWindow : Window
     // ============================ Start with Windows ============================
 
     /// <summary>
-    /// Repoints the Windows startup entry after the portable folder has been moved or renamed.
+    /// Repoints the Windows startup entry when it names an executable other than this one.
     /// Without this the entry survives the move and quietly launches nothing.
     /// </summary>
     private void RefreshStartupEntry()
@@ -1464,6 +1463,14 @@ public partial class MainWindow : Window
             Owner = IsVisible ? this : null
         };
         var accepted = dialog.ShowDialog() == true;
+
+        // The updater is already waiting for this process to exit. Closing the ordinary way saves
+        // the layout and marks the session clean before the files are swapped.
+        if (dialog.RestartForUpdate)
+        {
+            Close();
+            return;
+        }
 
         // Import writes layouts immediately, so the picker has to be refreshed even when the
         // dialog was cancelled afterwards.

@@ -8,8 +8,8 @@ namespace DriftDeck.Services;
 /// <para>
 /// A bare <c>EnsureCoreWebView2Async()</c> per panel lets WebView2 pick its own defaults, which
 /// means a separate browser process group per panel and a profile folder created next to the
-/// executable — so a portable folder grows a <c>DriftDeck.exe.WebView2\</c> directory at runtime
-/// and a sign-in in one panel is invisible to the next. Sharing one environment puts the profile
+/// executable — inside the installer's <c>current</c> folder, which every update replaces, so
+/// sign-ins would vanish on each update — and a sign-in in one panel is invisible to the next. Sharing one environment puts the profile
 /// under <c>%LOCALAPPDATA%\DriftDeck\webview2</c>, lets panels share cookies and logins, and lets
 /// WebView2 reuse a single browser process across panels instead of one per panel.
 /// </para>

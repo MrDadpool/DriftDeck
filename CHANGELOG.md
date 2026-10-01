@@ -25,8 +25,8 @@ First published release. Everything below is new to anyone who has not built fro
   running, and the whole behaviour can be switched off for a page that must hold a live connection.
 - **Shared browser profile.** Browser panels share one WebView2 profile under
   `%LOCALAPPDATA%\DriftDeck\webview2`. A sign-in in one panel now carries to the next, several
-  panels cost far less memory, and a portable folder no longer grows browser state beside the
-  executable at runtime.
+  panels cost far less memory, and browser state never lives in the install folder, which every
+  update replaces.
 - **Crash logs are bounded.** Logs are capped at 1 MB per file and pruned to the newest fourteen,
   so a repeated fault cannot fill the disk.
 
@@ -66,12 +66,21 @@ First published release. Everything below is new to anyone who has not built fro
   in, newest first and capped at twelve. Typing a URL into an 18-pixel toolbar during a game was
   the worst interaction left in the product.
 
+### Installer and updates
+
+- **One-click installer.** `DriftDeck.App-win-Setup.exe` installs for the current user with no
+  administrator prompt, adds Start menu and desktop shortcuts, and installs the WebView2 runtime
+  if it is missing. There is no portable ZIP.
+- **Updates you approve.** DriftDeck still only tells you a release exists. **Update and
+  restart** in Settings downloads it, closes DriftDeck the normal way so the layout is saved,
+  installs it, and starts the new version. It never downloads or restarts on its own.
+- Uninstalling leaves layouts, settings, and the browser profile in `%LOCALAPPDATA%\DriftDeck`,
+  and removes the start-with-Windows entry so it does not point at a deleted folder.
+
 ### Known limitations
 
-- Releases are not code-signed, so Windows SmartScreen warns the first time you run
-  `DriftDeck.exe`. Choose **More info**, then **Run anyway**.
-- Updating means downloading the new ZIP. DriftDeck is a portable folder and does not replace
-  itself.
+- Releases are not code-signed, so Windows SmartScreen warns the first time you run the
+  installer. Choose **More info**, then **Run anyway**.
 - Exclusive fullscreen still prevents the overlay from appearing; DriftDeck can only tell you that
   is what is happening.
 

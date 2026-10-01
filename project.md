@@ -74,11 +74,9 @@ points at is empty and `UpdateService` has nothing to compare against.
   change, so this is not about restoring data: it reports what happened and writes the fault to
   `%LOCALAPPDATA%\DriftDeck\logs`. Faults are logged and then allowed through; swallowing one
   would leave an always-on-top window alive in an unknown state over whatever the user is doing.
-- **Update check.** `Services/UpdateService.cs` makes one anonymous GET of the public GitHub
-  release list per launch and reports a newer tag in the status strip and the tray. It never
-  installs anything — DriftDeck is a portable folder, so replacing itself is not on the table.
-  Release builds stamp the tag into the assembly version (`Build-Portable.ps1 -Version`, wired
-  into CI) so a published build can compare against it.
+- **Update check.** One anonymous read of the public GitHub release feed per launch, reported
+  in the status strip and the tray. Superseded by the Velopack installer below, which keeps the
+  notice and adds an ask-first Update and restart.
 - **Not signed.** Releases carry no Authenticode signature, so SmartScreen warns on first run.
   This is documented in the README rather than worked around.
 
@@ -290,10 +288,11 @@ list, which is covered by a test.
 
 ## Build outputs
 
-`artifacts\` holds a single self-contained portable build published from the current source:
+`artifacts\releases` holds the Velopack installer and update packages built from the current
+source (`artifacts\publish` is the self-contained publish it packs):
 
 ```
-scripts\Build-Portable.ps1 -Configuration Release
+scripts\Build-Installer.ps1
 ```
 
 `bin\` and `obj\` regenerate on the next build. All three are covered by `.gitignore`.
@@ -390,6 +389,24 @@ still have left a `DriftDeck.exe.WebView2\` folder next to `DriftDeck.exe`; it i
   now roll at 1 MB to `crash-<date>.<n>.log` — rolling rather than truncating, because the first
   fault of a loop is usually the informative one — and the newest fourteen are kept.
 
+### Installer and updates (Velopack, decided 2026-10-01)
+
+Installer only — the portable ZIP is gone. `Setup.exe` from Velopack 1.2.161, pack id
+`DriftDeck.App`, per-user into `%LOCALAPPDATA%\DriftDeck.App`, WebView2 bootstrapped.
+
+- **Pack id is not `DriftDeck` on purpose.** Velopack deletes the whole `%LOCALAPPDATA%\{packId}`
+  folder on uninstall, and user data already lives in `%LOCALAPPDATA%\DriftDeck`. Same id would
+  have wiped layouts, settings, logs, and the browser profile on uninstall.
+- **Updates ask first.** Launch check only notifies. Settings > Update and restart downloads,
+  calls `WaitExitThenApplyUpdates`, then closes the main window the normal way, so the layout
+  is saved and the session sentinel is cleared before files are swapped.
+- **Custom `App.Main`.** `App.xaml` is a Page, `StartupObject` is `DriftDeck.App`, and
+  `VelopackApp.Build().Run()` runs before WPF. The uninstall hook removes the Run-key entry.
+- **Self-contained, not single-file**, so deltas work per file.
+- CI builds are versioned `<csproj>-ci.<run>` so an installed CI build never outranks a release.
+  Tag builds run `vpk download github` for a delta, and the release job publishes with
+  `vpk upload github`, using the CHANGELOG section as notes.
+
 ### Gather, notes export, bookmarks (Tier 4)
 
 - **Gather panels onto the current monitor.** `Services/Gather.cs` is the placement math as a
@@ -433,7 +450,14 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
 
 1. **Smoke-test a build.** Owner action; the assistant cannot run WPF — and cannot even compile
    locally, since the machine has SDK 8 against a `net10.0` target, so CI is the only compiler in
-   the loop. Grab the portable ZIP from the last passing CI run, or `.\scripts\Build-Portable.ps1`.
+   the loop. Grab the `DriftDeck-installer` artifact from the last passing CI run, or
+   `.\scripts\Build-Installer.ps1`. First, the installer itself — none of it has ever run:
+   - `Setup.exe` installs without an admin prompt, adds shortcuts, and launches DriftDeck
+   - the custom `App.Main` (Velopack runs before WPF): the app still starts, single-instance
+     still works, and the first-run tour still appears
+   - layouts survive an uninstall (`%LOCALAPPDATA%\DriftDeck` is separate from the
+     `%LOCALAPPDATA%\DriftDeck.App` install), and uninstall removes the Run-key entry
+   - Settings on a source build says it cannot update itself, and Check now is disabled
    Watch, in order of how likely each is to be wrong:
    - the bookmarks/recents picker: it is an in-panel overlay, so check it is not clipped by a
      short panel and that Escape and clicking another panel both close it
@@ -474,7 +498,7 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
 - **Code signing**, once a certificate exists. Azure Trusted Signing is the cheapest route that
   works from GitHub Actions. Note this gates a *good* first release rather than any release:
   SmartScreen warns on every download until it exists.
-- **Installer or `winget` package**, so an available update is not a manual ZIP swap.
+- **`winget` package**, now that a stable Setup.exe URL exists per release.
 - **Close with the host application.** Needs an explicit decision on the standing policy that
   DriftDeck never asks whether a game is running. That is a deliberate change of stance, not a
   feature to slip in.

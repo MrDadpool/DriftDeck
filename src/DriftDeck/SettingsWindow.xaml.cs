@@ -33,6 +33,15 @@ public partial class SettingsWindow : Window
     public AppSettings? ResultSettings { get; private set; }
 
     /// <summary>
+    /// True when the user chose Update and restart. The updater is waiting for DriftDeck to exit,
+    /// so the caller closes the app.
+    /// </summary>
+    public bool RestartForUpdate { get; private set; }
+
+    private readonly UpdateService _updates = new();
+    private UpdateInfo? _availableUpdate;
+
+    /// <summary>
     /// True once an import has written layouts. Import touches disk immediately rather than on
     /// Save, so the caller has to refresh its layout list even if the dialog is then cancelled.
     /// </summary>
@@ -71,7 +80,10 @@ public partial class SettingsWindow : Window
         // The registry is the truth here, not a copy in settings.json: the user can turn this
         // off from Task Manager, and a stored duplicate would then disagree with reality.
         RunAtLoginCheckBox.IsChecked = StartupRegistration.IsEnabled;
-        UpdateStatusText.Text = $"Version {UpdateService.CurrentVersion.ToString(3)}";
+        UpdateStatusText.Text = _updates.IsInstalled
+            ? $"Version {UpdateService.CurrentVersion.ToString(3)}"
+            : $"Version {UpdateService.CurrentVersion.ToString(3)} · not installed by Setup, so it cannot update itself";
+        CheckNowButton.IsEnabled = _updates.IsInstalled;
 
         // Edited copies, so cancelling leaves the running configuration untouched.
         foreach (var rule in settings.LayoutRules)
@@ -290,11 +302,11 @@ public partial class SettingsWindow : Window
         UpdateStatusText.Text = "Checking…";
         try
         {
-            using var updates = new UpdateService();
-            var update = await updates.CheckAsync();
-            UpdateStatusText.Text = update is null
+            _availableUpdate = await _updates.CheckAsync();
+            UpdateStatusText.Text = _availableUpdate is null
                 ? $"Version {UpdateService.CurrentVersion.ToString(3)} is the latest release."
-                : $"{update.Tag} is available. Use ‘Open releases’ to download it.";
+                : $"{_availableUpdate.Tag} is available.";
+            UpdateNowButton.Visibility = _availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
         }
         finally
         {
@@ -302,8 +314,34 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void OpenReleasesButton_OnClick(object sender, RoutedEventArgs e) =>
-        UpdateService.OpenReleasePage(UpdateService.ReleasesPageUrl);
+    /// <summary>
+    /// Downloads the release, hands it to the updater, and closes DriftDeck so it can be applied.
+    /// Unsaved changes on this page are discarded, which the button's tooltip says.
+    /// </summary>
+    private async void UpdateNowButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdate is null)
+        {
+            return;
+        }
+
+        UpdateNowButton.IsEnabled = false;
+        CheckNowButton.IsEnabled = false;
+        try
+        {
+            await _updates.DownloadAsync(_availableUpdate,
+                percent => Dispatcher.BeginInvoke(() => UpdateStatusText.Text = $"Downloading {_availableUpdate.Tag} · {percent}%"));
+            _updates.ApplyAfterExit(_availableUpdate);
+            RestartForUpdate = true;
+            DialogResult = false;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            UpdateStatusText.Text = $"The download failed: {exception.Message}";
+            UpdateNowButton.IsEnabled = true;
+            CheckNowButton.IsEnabled = true;
+        }
+    }
 
     private void OpenLogsButton_OnClick(object sender, RoutedEventArgs e)
     {

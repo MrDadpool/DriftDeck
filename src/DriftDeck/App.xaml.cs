@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using DriftDeck.Services;
+using Velopack;
 
 namespace DriftDeck;
 
@@ -18,6 +19,26 @@ public partial class App : Application
     /// because a fault during startup is exactly the one worth recording.
     /// </summary>
     internal static SessionSentinel? Sentinel { get; private set; }
+
+    /// <summary>
+    /// Velopack runs first and alone: during install, update, and uninstall the updater starts
+    /// this executable with its own arguments and expects it to exit without creating a window.
+    /// It must therefore run before WPF exists, which is why App.xaml is a Page rather than the
+    /// generated application definition.
+    /// </summary>
+    [STAThread]
+    private static void Main()
+    {
+        VelopackApp.Build()
+            // The Run key points into the install folder, which is about to be deleted. Left in
+            // place it would launch nothing at every sign-in.
+            .OnBeforeUninstallFastCallback(_ => StartupRegistration.Apply(false))
+            .Run();
+
+        var app = new App();
+        app.InitializeComponent();
+        app.Run();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {

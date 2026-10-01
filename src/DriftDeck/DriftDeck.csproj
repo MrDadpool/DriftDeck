@@ -11,6 +11,8 @@
     <AssemblyName>DriftDeck</AssemblyName>
     <Version>0.3.0</Version>
     <RootNamespace>DriftDeck</RootNamespace>
+    <!-- App.Main runs Velopack's install/update hooks before WPF starts; see App.xaml.cs. -->
+    <StartupObject>DriftDeck.App</StartupObject>
     <Authors>DriftDeck contributors</Authors>
     <Copyright>Copyright (c) 2026 DriftDeck contributors</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,5 +27,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+    <!-- Keep in step with the vpk version in .github/workflows/build.yml and Build-Installer.ps1. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
   </ItemGroup>
 </Project>
