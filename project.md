@@ -448,6 +448,8 @@ Nothing. Three pull requests merged; the Tier 4 batch above is on
      `MaxHeight`, so it should scroll rather than clip
    - checklist, timer, and image panels at the restyled sizes (merged from `panel-types-and-tests`
      after the restyle, so never seen together); `Ctrl+T` new timer against `Ctrl+Shift+T` reopen
+   - image panel: `Ctrl+V` paste after an image is already showing (host now takes focus); and
+     duplicating a checklist, timer, and image panel keeps their content
    - unplug a monitor with panels on it, and resume from sleep
 
 2. **Tag v0.3.0.** Fill the date into `CHANGELOG.md`, then `git tag v0.3.0` and push it. This is
