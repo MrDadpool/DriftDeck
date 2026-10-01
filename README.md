@@ -1,12 +1,13 @@
 # DriftDeck
 
-DriftDeck is an open-source Windows overlay workspace for games and other fullscreen or borderless applications. It provides independent, always-on-top browser and notes panels without inspecting or modifying the application underneath.
+DriftDeck is an open-source Windows overlay workspace for games and other fullscreen or borderless applications. It provides independent, always-on-top browser, notes, checklist, timer, and image panels without inspecting or modifying the application underneath.
 
 DriftDeck does not read game memory or files, hook rendering, inject code, automate input, extract game state, or communicate with anti-cheat software.
 
 ## Features
 
-- Independent browser and notes windows that can move anywhere on the Windows virtual desktop
+- Independent browser, notes, checklist, timer, and image windows that can move anywhere on the Windows virtual desktop
+- Checklists for quest steps, countdown timers for cooldowns, and pinned images for maps and references
 - Multi-monitor placement, including monitors with negative desktop coordinates
 - Interactive and native click-through modes
 - Composition-hosted WebView2 content, so opacity and pass-through apply to the full browser panel
@@ -32,7 +33,7 @@ DriftDeck does not read game memory or files, hook rendering, inject code, autom
 
 ## Using DriftDeck
 
-Start DriftDeck and use the compact dock to add browser or notes panels. Every panel is a separate desktop window.
+Start DriftDeck and use the dock to add panels. Every panel is a separate desktop window.
 
 ### Panels
 
@@ -46,8 +47,7 @@ Start DriftDeck and use the compact dock to add browser or notes panels. Every p
 
 ### Dock
 
-- `+ WEB` creates a browser panel.
-- `+ NOTES` creates a notes panel.
+- `+ Web`, `+ Notes`, `+ List`, `+ Timer`, and `+ Image` create a panel of that kind.
 - `Fade` changes all panel windows, including their content.
 - The speaker button mutes or unmutes every browser panel at once.
 - `_` collapses the dock to a 340 x 30 strip at the bottom-right of its current monitor.
@@ -69,11 +69,14 @@ Panel and dock shortcuts, active while DriftDeck has focus:
 
 | Action | Shortcut |
 | --- | --- |
+| New browser / notes / checklist / timer / image panel | `Ctrl+B` / `Ctrl+N` / `Ctrl+K` / `Ctrl+T` / `Ctrl+I` |
+| Reopen the last closed panel | `Ctrl+Shift+T` |
 | Duplicate the focused panel | `Ctrl+D` |
 | Lock or unlock the focused panel | `Ctrl+Shift+L` |
 | Mute or unmute the focused browser panel | `Ctrl+Shift+M` |
 | Mute or unmute every browser panel | `Ctrl+Shift+A` |
 | Copy the focused notes panel to the clipboard | `Ctrl+Shift+C` |
+| Paste an image into the focused image panel | `Ctrl+V` |
 
 Quick-layout shortcuts are global like the two above, and are assigned under `SETTINGS`:
 
@@ -96,6 +99,28 @@ accidental drags, not deliberate commands.
 Notes save as you type. The clipboard button on a notes panel's title bar, or `Ctrl+Shift+C`,
 copies the whole note out — otherwise notes live only inside the layout file.
 
+### Checklists
+
+`+ List` or `Ctrl+K`. Type an item and press Enter; the box stays put under the list so a burst
+of items never needs the mouse. The footer counts what is **left**, not what is done. Remove
+buttons appear only on the row you point at, and **Clear done** appears only once something is
+ticked. Items are cut at 200 characters rather than refused, so a paste still lands.
+
+### Timers
+
+`+ Timer` or `Ctrl+T`. Set a length — a bare number is minutes, so `5`, `5:00`, `90`, and
+`1:30:00` all work — then start, pause, or reset. A running timer is saved as the moment it ends,
+so it stays right through a roll-up, a layout switch, or a restart. At zero the readout turns
+amber and stops. It makes no sound and takes no focus: an overlay must not interrupt a game.
+
+### Image panels
+
+`+ Image` or `Ctrl+I`. Drop a file on the panel, paste with `Ctrl+V`, or use **Choose image**.
+A panel points at your file rather than copying it, so moving or deleting the file shows a plain
+"file is missing" note instead of a stale copy. Pasted images have no file behind them, so they
+are saved as PNG under `%LOCALAPPDATA%\DriftDeck\pasted-images`, and ones no layout uses any more
+are cleaned up at startup.
+
 ### Bookmarks and recent pages
 
 The chevron beside a browser panel's address box opens a picker with two lists: bookmarks, which
@@ -105,7 +130,7 @@ into a panel toolbar mid-game is the interaction worth avoiding.
 
 ### Layouts
 
-A layout stores dock geometry, panel types, desktop coordinates, sizes, URLs, notes, opacity, and content scale. Use the editable layout selector with `LOAD`, `SAVE`, `COPY`, and `DEL`.
+A layout stores dock geometry, panel types, desktop coordinates, sizes, URLs, notes, checklist items, timer state, image paths, opacity, and content scale. Use the editable layout selector with `LOAD`, `SAVE`, `COPY`, and `DEL`.
 
 ### Quick layouts
 
@@ -122,8 +147,8 @@ switching until you move to a different application, exactly as the `LOAD` butto
 
 `SETTINGS` can register DriftDeck to start when you sign in. It is a per-user entry, appears in
 Task Manager's Startup tab so it can also be disabled from there, and never needs elevation.
-Moving or renaming the DriftDeck folder is handled: the entry is repointed at the new location on
-the next launch instead of silently launching nothing.
+If the entry points at a different copy of DriftDeck — a build run from source, say — it is
+repointed at the installed one on the next launch instead of silently launching nothing.
 
 ### Panels that stay out of the way
 
@@ -187,7 +212,11 @@ Requirements:
 dotnet restore .\DriftDeck.slnx
 dotnet build .\DriftDeck.slnx --configuration Debug
 dotnet run --project .\src\DriftDeck\DriftDeck.csproj
+dotnet test .\DriftDeck.slnx
 ```
+
+The tests cover the rules that are invisible in the running app — snapping, hotkey parsing,
+layout matching, layout storage and migration, checklists, timers, and image panels.
 
 ## Installing
 
@@ -224,9 +253,10 @@ The release job publishes the installer and update packages with `vpk upload git
 
 ```text
 src/DriftDeck/                  WPF application
-  Controls/PanelHost.*         Browser and notes panel UI
+  Controls/PanelHost.*         Every panel kind's UI
   Models/                      Persisted settings and layout models
   Services/                    Hotkeys, persistence, and Win32 window behavior
+tests/DriftDeck.Tests/         xUnit tests for the pure models and services
 .github/workflows/             GitHub build and release automation
 scripts/Build-Installer.ps1    Reproducible installer build (Velopack)
 SC_Overlay.md                  Original product brief

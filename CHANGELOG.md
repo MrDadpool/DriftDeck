@@ -37,11 +37,22 @@ First published release. Everything below is new to anyone who has not built fro
   fullscreen application. A digit another program already owns is reported rather than failing
   quietly.
 - **Start with Windows.** Optional, per-user, and listed in Task Manager's Startup tab so it can
-  be turned off from there too. Moving the DriftDeck folder is handled: the entry is repointed on
-  the next launch.
+  be turned off from there too. An entry pointing at a different copy of DriftDeck is repointed
+  on the next launch.
 - **Export and import layouts.** Every saved layout as one `.driftdeck` file, for backup, moving
   machines, or sharing a setup. An imported layout whose name is taken is added as
   `Name (imported)` rather than written over yours.
+
+### New panel kinds
+
+- **Checklists** (`+ List`, `Ctrl+K`) for quest steps and run plans. Enter adds an item without
+  leaving the keyboard, the footer counts what is left, and **Clear done** sweeps ticked items.
+- **Timers** (`+ Timer`, `Ctrl+T`) for cooldowns. A running timer is stored as the moment it
+  ends, so it survives a roll-up, a layout switch, or a restart and still tells the truth. At zero
+  it turns amber and stops, with no sound and no focus stolen from the game.
+- **Image panels** (`+ Image`, `Ctrl+I`) for maps, builds, and reference sheets. Drop a file,
+  paste with `Ctrl+V`, or choose one. Panels point at your file rather than copying it; pasted
+  images are kept as PNG and cleaned up once no layout uses them.
 
 ### Panels
 
@@ -63,8 +74,21 @@ First published release. Everything below is new to anyone who has not built fro
   and never came out.
 - **Bookmarks and recent pages** behind the chevron beside a browser panel's address box.
   Bookmarks are shared by every layout; recent addresses belong to the layout they were opened
-  in, newest first and capped at twelve. Typing a URL into an 18-pixel toolbar during a game was
+  in, newest first and capped at twelve. Typing a URL into a panel toolbar during a game was
   the worst interaction left in the product.
+
+### Look and feel
+
+- **Refreshed visual design.** A cyan accent, deeper blue surfaces, and larger title bars,
+  buttons, and controls that are easier to hit during a game. The dock's toolbar is two rows:
+  panel creation and fade on top, layouts below. Muted and disabled text are lighter, so
+  secondary labels read more easily over a busy game.
+
+### Under the hood
+
+- **Test suite.** 168 tests cover the rules that are invisible in the running app — snapping,
+  hotkey parsing, layout matching, layout storage and migration, checklists, timers, image
+  panels, and panel duplication — and run on every build.
 
 ### Installer and updates
 
