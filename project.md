@@ -441,8 +441,40 @@ Installer only — the portable ZIP is gone. `Setup.exe` from Velopack 1.2.161, 
 
 ## In progress
 
-Nothing. Three pull requests merged; the Tier 4 batch above is on
-`feat/gather-notes-bookmarks` and has never been executed.
+**Ship v0.3.0 before World of Warcraft: Forever launches (2026-11-04).** The owner plays it on a
+Windows PC and wants DriftDeck over it. Plan: smoke-test the CI installer on that PC, fix what
+fails, tag v0.3.0.
+
+- 2026-10-30: the `Windows build` workflow had been disabled and every CI artifact had expired,
+  so there was no installer to test. Re-enabled it and dispatched a fresh run on `main` (needs the
+  `MrDadpool` gh account — the active `DadMadeAnApp` account has no admin on this repo).
+- The smoke test below plus WoW-specific checks (borderless mode, pass-through camera drag, focus
+  returning to the game, hotkey clashes with game keybinds, per-app rule capture) live in a
+  pass/fail page with a copyable report: https://claude.ai/artifact/HYLnTMV6ZRCeoAbYqqWQv4
+- `docs/RELEASING.md` rewritten for the Velopack installer; it still described the dropped
+  portable ZIP.
+- **GitHub Actions is disabled at the repository level** (`actions/permissions` → `enabled:
+  false`), which is why the run sits queued. The owner chose to leave it off (2026-10-30), so
+  the installer is built on the Windows PC with `scripts\Build-Installer.ps1` and the v0.3.0 tag
+  will not publish a release until Actions is back on.
+- **Game-art theme (owner request, before launch).** Owner wants the app to look like WoW using
+  Blizzard's own art, kept off the public repo. Built as a local skin: `Services/ThemeService.cs`
+  reads `%LOCALAPPDATA%\DriftDeck\theme\theme.json`, whose keys name existing `App.xaml` slots;
+  the slot's current type decides how the value is read (colour, image brush with pixel crop /
+  tile, number, radius, font file). All brush, radius, and font references are now
+  `DynamicResource`, so Reload repaints live. `Services/BlpDecoder.cs` reads exported `.blp`
+  textures directly. Text buttons gained a three-slice art layer (`ThemeArt.Show`, off for
+  ghost and icon buttons) fed by `ButtonArt*Brush` slots. The embedded preset
+  `Themes/game.theme.json` names WoW paths (verified against Blizzard's UI source:
+  `UI-DialogBox-Background`, `UI-Panel-Button-Up/Down` with 12/56/12 px slices of an 80×22
+  region) and ships no art. README now says the one opt-in exception to staying out of a game
+  folder. Unverified: the Forever client's folder name and whether `exportInterfaceFiles` still
+  works there.
+- The machine now has a .NET 10 SDK in the session scratchpad; `dotnet build DriftDeck.slnx
+  -p:EnableWindowsTargeting=true` compiles the whole solution, XAML included, on macOS. Tests
+  still need Windows.
+
+The Tier 4 batch is merged into `main` and, like everything since v0.2.0, has never been executed.
 
 ## Next up
 

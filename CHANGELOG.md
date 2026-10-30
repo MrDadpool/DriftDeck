@@ -7,6 +7,15 @@ date the work was done.
 
 First published release. Everything below is new to anyone who has not built from source.
 
+### Themes
+
+- **Game-art themes.** A local `theme.json` can restyle the dock, panels, and Settings with a
+  game's own fonts and interface art, read in place from the game folder. Settings → Theme points
+  it at a folder and turns it on; the bundled preset is set up for World of Warcraft's exported
+  interface art and names files by path only, so no game art ships with DriftDeck. Textures in
+  Blizzard's BLP format are decoded directly, and a slot whose file is missing keeps its
+  built-in look.
+
 ### Overlay reliability
 
 - **Exclusive-fullscreen notice.** Exclusive fullscreen is the one desktop state where an

@@ -1,0 +1,63 @@
+// DriftDeck theme. Every key under "resources" names a slot in App.xaml.
+// Brushes take "#AARRGGBB" or { "image": "path", "crop": [x, y, w, h], "tile": size, "opacity": 0-1 }.
+// Paths are relative to "root". Images may be .blp, .png, or .jpg; fonts .ttf or .otf.
+//
+// This preset names files from a World of Warcraft install: fonts from its Fonts folder and
+// interface art from the BlizzardInterfaceArt folder the game writes when you run
+// "exportInterfaceFiles art" in its console. None of those files ship with DriftDeck; a slot
+// whose file is missing keeps its built-in look.
+{
+  "name": "Game art",
+  "enabled": true,
+  "root": "",
+  "resources": {
+    "BodyFont": "Fonts/FRIZQT__.TTF",
+    "DisplayFont": "Fonts/MORPHEUS.TTF",
+
+    "TextBrush": "#FFFFFFFF",
+    "MutedBrush": "#FFC9BFA5",
+    "DisabledBrush": "#FF7F7F7F",
+    "AccentBrush": "#FFFFD100",
+    "AccentDimBrush": "#FFB38F00",
+    "AccentSoftBrush": "#33FFD100",
+    "AccentPillBrush": "#30FFD100",
+    "WarnBrush": "#FFFF8000",
+    "WarnPillBrush": "#38FF8000",
+    "DangerBrush": "#FFFF2020",
+    "StrokeBrush": "#FFA8873A",
+    "StrokeSubtleBrush": "#FF5E4A24",
+
+    // Shown by browser panels before a page paints; WebView2 takes no image, only a colour.
+    "SurfaceDeepColor": "#FF0C0906",
+    "SurfaceDeepBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Background.blp", "tile": 64, "opacity": 0.96 },
+    "SurfaceBaseBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Background.blp", "tile": 64, "opacity": 0.94 },
+    "SurfaceSunkenBrush": "#E60C0906",
+    "SurfaceStatusBrush": "#F0120D08",
+    "SurfaceTitleBrush": "#FC231910",
+    "SurfaceRaisedBrush": "#FF2E2216",
+    "SurfaceActiveBrush": "#FF4A3818",
+    "SurfacePopupBrush": "#FF15100A",
+    "ConsoleHeaderBrush": "#FC2A1E12",
+
+    "ButtonFaceBrush": "#FF4A0C08",
+    "ButtonPressedFaceBrush": "#FF2E0604",
+    "ButtonStrokeBrush": "#FFA8873A",
+    "ButtonTextBrush": "#FFFFD100",
+    "AccentButtonFaceBrush": "#FF4A0C08",
+    "AccentButtonStrokeBrush": "#FFFFD100",
+    "AccentButtonTextBrush": "#FFFFD100",
+
+    // Interface\Buttons\UI-Panel-Button-*: 12 px caps either side of a stretched middle,
+    // the same slices the game's own UIPanelButtonTemplate draws.
+    "ButtonArtLeftBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Up.blp", "crop": [0, 0, 12, 22] },
+    "ButtonArtMiddleBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Up.blp", "crop": [12, 0, 56, 22] },
+    "ButtonArtRightBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Up.blp", "crop": [68, 0, 12, 22] },
+    "ButtonArtPressedLeftBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Down.blp", "crop": [0, 0, 12, 22] },
+    "ButtonArtPressedMiddleBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Down.blp", "crop": [12, 0, 56, 22] },
+    "ButtonArtPressedRightBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Down.blp", "crop": [68, 0, 12, 22] },
+    "ButtonArtCapWidth": 17,
+
+    "ControlRadius": 2,
+    "FrameRadius": 3
+  }
+}

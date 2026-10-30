@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Welcome to DriftDeck" Width="620" SizeToContent="Height"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize" ShowInTaskbar="False"
-        FontFamily="Segoe UI"
-        Background="{StaticResource SurfaceBaseBrush}" Foreground="{StaticResource TextBrush}">
+        FontFamily="{DynamicResource BodyFont}"
+        Background="{DynamicResource SurfaceBaseBrush}" Foreground="{DynamicResource TextBrush}">
     <Grid Margin="26,24,26,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -14,8 +14,8 @@
 
         <StackPanel>
             <TextBlock x:Name="StepLabel" Style="{StaticResource GroupLabel}"
-                       Foreground="{StaticResource AccentBrush}" Text="STEP 1 OF 3" />
-            <TextBlock x:Name="TitleText" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="{StaticResource TextXl}" FontWeight="Bold"
+                       Foreground="{DynamicResource AccentBrush}" Text="STEP 1 OF 3" />
+            <TextBlock x:Name="TitleText" TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="{DynamicResource DisplayFont}" FontSize="{StaticResource TextXl}" FontWeight="Bold"
                        Text="DriftDeck is a workspace that floats over anything" />
         </StackPanel>
 
@@ -24,17 +24,17 @@
             <StackPanel x:Name="StepOne">
                 <TextBlock TextWrapping="Wrap" LineHeight="20" FontSize="{StaticResource TextSm}"
                            Text="Browser and notes panels sit above your game or application as ordinary always-on-top desktop windows. Drag them anywhere across every monitor, fade them until they are barely there, and leave them running." />
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="SAFETY BOUNDARY" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" LineHeight="19"
                                    FontSize="{StaticResource TextSm}"
                                    Text="DriftDeck never reads game memory or files, injects code, hooks rendering, automates input, or talks to anti-cheat software. It only knows which window is in front, the same thing your taskbar knows." />
                         <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="{StaticResource TextSm}"
-                                   Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource MutedBrush}"
                                    Text="Run your game in borderless-windowed mode. Exclusive fullscreen can stop any desktop overlay from appearing." />
                     </StackPanel>
                 </Border>
@@ -44,37 +44,37 @@
                 <TextBlock TextWrapping="Wrap" LineHeight="20" FontSize="{StaticResource TextSm}"
                            Text="Two shortcuts work everywhere, including inside a game. They are the whole reason the overlay stays out of your way." />
 
-                <Border Margin="0,16,0,0" Padding="16,13" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,13" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <Border Padding="7,2" Background="{StaticResource AccentPillBrush}" CornerRadius="4">
-                                <TextBlock x:Name="InteractionHotkeyText" Foreground="{StaticResource AccentBrush}"
+                            <Border Padding="7,2" Background="{DynamicResource AccentPillBrush}" CornerRadius="4">
+                                <TextBlock x:Name="InteractionHotkeyText" Foreground="{DynamicResource AccentBrush}"
                                            FontWeight="SemiBold" FontSize="{StaticResource TextSm}" />
                             </Border>
                             <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource TextSm}"
                                        Text="Pass-through: clicks fall to the game" />
                         </StackPanel>
-                        <TextBlock Margin="0,7,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,7,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="Panels stay on screen but stop catching the mouse, so you can read a wiki page while you play. Press it again to interact with them." />
 
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <Border Padding="7,2" Background="{StaticResource AccentPillBrush}" CornerRadius="4">
-                                <TextBlock x:Name="VisibilityHotkeyText" Foreground="{StaticResource AccentBrush}"
+                            <Border Padding="7,2" Background="{DynamicResource AccentPillBrush}" CornerRadius="4">
+                                <TextBlock x:Name="VisibilityHotkeyText" Foreground="{DynamicResource AccentBrush}"
                                            FontWeight="SemiBold" FontSize="{StaticResource TextSm}" />
                             </Border>
                             <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource TextSm}"
                                        Text="Hide and restore the whole overlay" />
                         </StackPanel>
-                        <TextBlock Margin="0,7,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,7,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="Everything disappears and comes back exactly where it was. A tray icon brings it back too." />
                     </StackPanel>
                 </Border>
 
-                <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                            FontSize="{StaticResource TextXs}"
                            Text="Both shortcuts can be changed later under Settings." />
             </StackPanel>
@@ -90,7 +90,7 @@
                 <CheckBox x:Name="AutoSwitchCheckBox" Margin="0,10,0,0"
                           Content="Switch layouts automatically per application (set up rules in Settings)" />
 
-                <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                            FontSize="{StaticResource TextXs}" LineHeight="17"
                            Text="Every panel has its own opacity and zoom in its title bar. Ctrl+B adds a browser panel, Ctrl+N adds notes, Ctrl+K adds a checklist, Ctrl+T adds a timer, Ctrl+I pins an image, and Ctrl+Shift+T reopens the last one you closed." />
             </StackPanel>

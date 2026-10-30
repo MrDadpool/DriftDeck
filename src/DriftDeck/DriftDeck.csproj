@@ -32,6 +32,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Paths and colours only. The art and fonts it names stay in the user's game folder. -->
+    <EmbeddedResource Include="Themes\game.theme.json" LogicalName="DriftDeck.Themes.game.theme.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
     <Page Include="App.xaml" />
   </ItemGroup>

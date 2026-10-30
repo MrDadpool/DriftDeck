@@ -4,8 +4,8 @@
         xmlns:models="clr-namespace:DriftDeck.Models"
         Title="DriftDeck Settings" Width="740" SizeToContent="Height" MaxHeight="860"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
-        FontFamily="Segoe UI"
-        Background="{StaticResource SurfaceBaseBrush}" Foreground="{StaticResource TextBrush}">
+        FontFamily="{DynamicResource BodyFont}"
+        Background="{DynamicResource SurfaceBaseBrush}" Foreground="{DynamicResource TextBrush}">
     <Grid Margin="26,24,26,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -14,9 +14,9 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock Text="Workspace settings" FontSize="{StaticResource TextXl}" FontWeight="Bold" />
+            <TextBlock Text="Workspace settings" FontFamily="{DynamicResource DisplayFont}" FontSize="{StaticResource TextXl}" FontWeight="Bold" />
             <TextBlock Text="These shortcuts work everywhere while DriftDeck is running, including inside a game."
-                       Margin="0,6,0,0" Foreground="{StaticResource MutedBrush}"
+                       Margin="0,6,0,0" Foreground="{DynamicResource MutedBrush}"
                        FontSize="{StaticResource TextSm}" TextWrapping="Wrap" />
         </StackPanel>
 
@@ -53,14 +53,14 @@
                 </Grid>
 
                 <StackPanel Margin="0,18,0,0">
-                    <TextBlock x:Name="HintText" Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}"
+                    <TextBlock x:Name="HintText" Foreground="{DynamicResource MutedBrush}" FontSize="{StaticResource TextXs}"
                                TextWrapping="Wrap"
                                Text="Click a shortcut box and press the keys. Windows-reserved combinations are refused." />
-                    <TextBlock x:Name="ValidationText" Margin="0,8,0,0" Foreground="{StaticResource DangerBrush}"
+                    <TextBlock x:Name="ValidationText" Margin="0,8,0,0" Foreground="{DynamicResource DangerBrush}"
                                FontSize="{StaticResource TextXs}" TextWrapping="Wrap" />
                     <CheckBox x:Name="RunAtLoginCheckBox" Margin="0,18,0,0"
                               Content="Start DriftDeck when I sign in to Windows" />
-                    <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                    <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                FontSize="{StaticResource TextXs}" LineHeight="17"
                                Text="Registered for this user only, and listed in Task Manager's Startup tab so it can be turned off from there too. Moving the DriftDeck folder is handled: the entry is repointed on the next launch." />
                     <CheckBox x:Name="StartHiddenCheckBox" Margin="0,12,0,0"
@@ -68,15 +68,15 @@
                 </StackPanel>
 
                 <!-- ================= Per-application layouts ================= -->
-                <Border Margin="0,22,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,22,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="PER-APPLICATION LAYOUTS" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <CheckBox x:Name="AutoSwitchCheckBox" Margin="0,10,0,0"
                                   Content="Load a layout automatically when I switch to a matching application" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="DriftDeck reads only the name and window title of whichever window is in front, the same information the taskbar shows. Loading a layout by hand pauses switching until you move to a different application." />
 
@@ -126,7 +126,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock x:Name="NoRulesText" Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock x:Name="NoRulesText" Margin="0,2,0,0" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}"
                                    Text="No rules yet. Add one, or capture the application you are about to switch to." />
 
@@ -138,19 +138,19 @@
                                     Click="CaptureRuleButton_OnClick"
                                     ToolTip="Click, then click the application you want a rule for. It is captured after 4 seconds." />
                             <TextBlock x:Name="CaptureStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}" />
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="{StaticResource TextXs}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <!-- ================= Quick layouts ================= -->
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="QUICK LAYOUTS" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
-                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="Load a layout without touching the dock. Rules handle switching that should happen by itself; this is for deciding you want a different workspace right now, which otherwise means clicking the dock and taking focus off a fullscreen application. A digit another program already owns is reported on the next launch rather than failing quietly." />
 
@@ -196,7 +196,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock x:Name="NoQuickLayoutsText" Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock x:Name="NoQuickLayoutsText" Margin="0,2,0,0" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}"
                                    Text="No shortcuts yet. Add one to reach a layout from inside a game." />
 
@@ -208,15 +208,15 @@
                 </Border>
 
                 <!-- ================= Panels ================= -->
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="PANELS" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <CheckBox x:Name="IdleDimCheckBox" Margin="0,10,0,0"
                                   Content="Fade panels I have not touched for a while" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="A panel you left open stops competing for attention until you go back to it. The panel you are working in and any panel the pointer is resting over never fade." />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -235,25 +235,54 @@
                         </StackPanel>
                         <CheckBox x:Name="SuspendHiddenCheckBox" Margin="0,16,0,0"
                                   Content="Pause browser panels while the overlay is hidden" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="A hidden panel otherwise keeps rendering, decoding video, and running page timers, spending the graphics and processor time you hid it to get back. A panel that is audibly playing and not muted is left running. Turn this off if a page has to hold a live connection open." />
                         <CheckBox x:Name="FullscreenWarningCheckBox" Margin="0,16,0,0"
                                   Content="Tell me when an application is in exclusive fullscreen" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="Exclusive fullscreen is the one mode no ordinary desktop overlay can appear over, so DriftDeck says so instead of looking broken. It asks Windows whether the desktop is being presented exclusively — the same question a notification asks — and never which application is doing it." />
                     </StackPanel>
                 </Border>
 
+                <!-- ================= Theme ================= -->
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
+                    <StackPanel>
+                        <TextBlock Text="THEME" Style="{StaticResource GroupLabel}"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="{StaticResource TextXs}" LineHeight="17"
+                                   Text="Dress DriftDeck in a game's own fonts and interface art, read from the game folder on this PC. Nothing is copied into DriftDeck or sent anywhere. For World of Warcraft, start the game with -console, then on the login screen run exportInterfaceFiles art so the art exists to read." />
+                        <TextBlock x:Name="ThemeStatusText" Margin="0,10,0,0" TextWrapping="Wrap"
+                                   FontSize="{StaticResource TextSm}" />
+                        <TextBlock x:Name="ThemeProblemsText" Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{DynamicResource WarnBrush}" FontSize="{StaticResource TextXs}" LineHeight="17" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button x:Name="ThemeFolderButton" Style="{StaticResource GhostButton}"
+                                    Content="Use game folder…" Width="150" Click="ThemeFolderButton_OnClick"
+                                    ToolTip="Pick the game's install folder, the one holding Fonts and BlizzardInterfaceArt" />
+                            <Button x:Name="ThemeToggleButton" Style="{StaticResource GhostButton}"
+                                    Content="Turn off" Width="110" Margin="6,0,0,0" Click="ThemeToggleButton_OnClick" />
+                            <Button x:Name="ThemeReloadButton" Style="{StaticResource GhostButton}"
+                                    Content="Reload" Width="90" Margin="6,0,0,0" Click="ThemeReloadButton_OnClick"
+                                    ToolTip="Read theme.json again after editing it" />
+                            <Button x:Name="ThemeOpenButton" Style="{StaticResource GhostButton}"
+                                    Content="Open theme folder" Width="150" Margin="6,0,0,0" Click="ThemeOpenButton_OnClick" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- ================= Layout files ================= -->
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="LAYOUT FILES" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
-                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="Every saved layout in one file, so a workspace can be backed up, carried to another machine, or handed to someone else. An imported layout whose name is already taken is added alongside yours, never over it." />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -263,22 +292,22 @@
                                     Content="Import layouts" Width="140" Margin="6,0,0,0"
                                     Click="ImportLayoutsButton_OnClick" />
                             <TextBlock x:Name="LayoutFileStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}"
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="{StaticResource TextXs}"
                                        TextTrimming="CharacterEllipsis" MaxWidth="230" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <!-- ================= Updates ================= -->
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="UPDATES" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <CheckBox x:Name="CheckForUpdatesCheckBox" Margin="0,10,0,0"
                                   Content="Tell me when a newer release is published" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="{StaticResource TextXs}" LineHeight="17"
                                    Text="An anonymous read of the public release list on GitHub. Nothing about you or the applications you run is sent. Nothing downloads until you choose Update and restart, and DriftDeck never restarts on its own." />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -292,22 +321,22 @@
                                     Margin="6,0,0,0" Click="OpenLogsButton_OnClick"
                                     ToolTip="Crash reports are written here and never sent anywhere" />
                             <TextBlock x:Name="UpdateStatusText" Margin="10,0,0,0" VerticalAlignment="Center"
-                                       Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}" />
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="{StaticResource TextXs}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <!-- ================= Safety ================= -->
-                <Border Margin="0,16,0,0" Padding="16,14" Background="{StaticResource SurfaceSunkenBrush}"
-                        BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                        CornerRadius="{StaticResource ControlRadius}">
+                <Border Margin="0,16,0,0" Padding="16,14" Background="{DynamicResource SurfaceSunkenBrush}"
+                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource ControlRadius}">
                     <StackPanel>
                         <TextBlock Text="SAFETY BOUNDARY" Style="{StaticResource GroupLabel}"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                         <TextBlock Margin="0,9,0,0" TextWrapping="Wrap" LineHeight="19" FontSize="{StaticResource TextSm}"
                                    Text="DriftDeck is an ordinary standalone desktop window. It never reads game memory or files, injects code, hooks rendering, automates input, extracts telemetry, or interacts with anti-cheat software. Per-application layouts use only the foreground window's process name and title, which Windows publishes to every desktop application." />
                         <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="{StaticResource TextSm}"
-                                   Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource MutedBrush}"
                                    Text="Borderless-windowed mode is recommended. Exclusive fullscreen may prevent desktop overlays from appearing." />
                     </StackPanel>
                 </Border>

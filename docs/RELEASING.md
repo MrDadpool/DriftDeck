@@ -8,11 +8,16 @@ From the repository root:
 dotnet restore .\DriftDeck.slnx
 dotnet build .\DriftDeck.slnx --configuration Debug --no-restore
 dotnet build .\DriftDeck.slnx --configuration Release --no-restore
-.\scripts\Build-Portable.ps1
+dotnet test .\DriftDeck.slnx --configuration Release --no-build
+.\scripts\Build-Installer.ps1
 ```
 
-Extract `artifacts\DriftDeck-win-x64.zip` into a temporary directory and launch `DriftDeck.exe`. Verify:
+Or download the `DriftDeck-installer` artifact from the latest passing `Windows build` run.
 
+Run the `Setup.exe` from `artifacts\releases`. It installs per user, without an admin prompt, to
+`%LOCALAPPDATA%\DriftDeck.App`. Verify:
+
+- Setup adds shortcuts and launches DriftDeck; the first-run tour appears.
 - The dock, a browser panel, and a notes panel open.
 - Interactive/pass-through and hide/restore shortcuts work.
 - Browser content and chrome change opacity together.
@@ -31,7 +36,7 @@ git tag v0.3.0
 git push origin v0.3.0
 ```
 
-The Windows workflow builds the source, creates the self-contained archive, creates the GitHub Release when needed, and uploads `DriftDeck-win-x64.zip`.
+The Windows workflow builds and tests the source, builds the Velopack installer with a delta against the previous release, creates the GitHub Release, and uploads `Setup.exe` with the update packages. Release notes come from the tag's section of `CHANGELOG.md`.
 
 Confirm the release notes and asset before public announcement. Releases are unsigned until a code-signing workflow is added, so Windows may show a reputation warning.
 

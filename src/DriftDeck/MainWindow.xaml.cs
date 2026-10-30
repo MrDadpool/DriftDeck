@@ -232,6 +232,7 @@ public partial class MainWindow : Window
         ApplyFullscreenWarningSetting();
         ReportRejectedQuickLayouts();
         RefreshStartupEntry();
+        ReportThemeProblems();
         ReportPreviousCrash();
         _ = CheckForUpdatesAsync();
         _ = SweepPastedImagesAsync();
@@ -305,6 +306,19 @@ public partial class MainWindow : Window
         catch (IOException)
         {
             // The tour would simply run once more. Not worth an error message on first launch.
+        }
+    }
+
+    /// <summary>
+    /// A theme that half-loaded looks like a rendering bug, so say which slots kept their
+    /// built-in look. Settings lists every problem; the strip only has room for the count.
+    /// </summary>
+    private void ReportThemeProblems()
+    {
+        if (App.Theme?.LastReport is { IsActive: true, Problems.Count: > 0 } report)
+        {
+            SetStatus($"Theme ‘{report.Name}’: {report.Problems.Count} item(s) could not be loaded. " +
+                      "Settings shows which.", StatusKind.Warning);
         }
     }
 
@@ -1031,7 +1045,7 @@ public partial class MainWindow : Window
         var allMuted = browsers.Count > 0 && browsers.All(host => host.Definition.IsMuted);
         _muteAll = allMuted;
         MuteAllButton.Content = allMuted ? "\uE74F" : "\uE767";
-        MuteAllButton.Foreground = (Brush)FindResource(allMuted ? "WarnBrush" : "MutedBrush");
+        MuteAllButton.SetResourceReference(ForegroundProperty, allMuted ? "WarnBrush" : "MutedBrush");
         MuteAllButton.ToolTip = allMuted
             ? "Unmute every browser panel (Ctrl+Shift+A)"
             : "Mute every browser panel (Ctrl+Shift+A)";
@@ -1149,8 +1163,8 @@ public partial class MainWindow : Window
         }
 
         ModeText.Text = _clickThrough ? "Pass-through" : "Interactive";
-        ModePill.Background = (Brush)FindResource(_clickThrough ? "WarnPillBrush" : "AccentPillBrush");
-        ModeText.Foreground = (Brush)FindResource(_clickThrough ? "WarnBrush" : "AccentBrush");
+        ModePill.SetResourceReference(Border.BackgroundProperty, _clickThrough ? "WarnPillBrush" : "AccentPillBrush");
+        ModeText.SetResourceReference(TextBlock.ForegroundProperty, _clickThrough ? "WarnBrush" : "AccentBrush");
         PassThroughButton.Content = _clickThrough ? "Interact" : "Pass through";
 
         // A dimmed, warm-bordered dock is the only affordance left once clicks stop landing.
@@ -1234,12 +1248,12 @@ public partial class MainWindow : Window
     private void SetStatus(string message, StatusKind kind)
     {
         StatusText.Text = message;
-        StatusDot.Fill = kind switch
+        StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, kind switch
         {
-            StatusKind.Success => (Brush)FindResource("AccentBrush"),
-            StatusKind.Warning => (Brush)FindResource("WarnBrush"),
-            _ => (Brush)FindResource("MutedBrush")
-        };
+            StatusKind.Success => "AccentBrush",
+            StatusKind.Warning => "WarnBrush",
+            _ => "MutedBrush"
+        });
 
         // Short fade so a repeated message still reads as a new event.
         Motion.To(StatusPanel, OpacityProperty, 0.25, 1, Motion.Base);
@@ -1412,7 +1426,7 @@ public partial class MainWindow : Window
             _deleteArmTimer.Stop();
             _deleteArmTimer.Start();
             DeleteButton.Content = "Confirm";
-            DeleteButton.BorderBrush = (Brush)FindResource("DangerBrush");
+            DeleteButton.SetResourceReference(BorderBrushProperty, "DangerBrush");
             SetStatus($"Click Confirm to delete ‘{name}’ · cancels in 4 seconds", StatusKind.Warning);
             return;
         }

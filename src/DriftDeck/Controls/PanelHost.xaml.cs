@@ -707,7 +707,7 @@ public partial class PanelHost : UserControl, IDisposable
         var remaining = _timer.RemainingAt(DateTime.UtcNow);
         TimerReadout.Text = TimerState.Format(remaining);
         _timerFinished = remaining == 0;
-        TimerReadout.Foreground = (Brush)FindResource(_timerFinished ? "WarnBrush" : "TextBrush");
+        TimerReadout.SetResourceReference(TextBlock.ForegroundProperty, _timerFinished ? "WarnBrush" : "TextBrush");
         TimerStartButton.Content = _timer.IsRunning ? "Pause" : "Start";
         TimerResetButton.IsEnabled = _timer.IsRunning || remaining != _timer.DurationSeconds;
     }
@@ -1115,7 +1115,7 @@ public partial class PanelHost : UserControl, IDisposable
             ? "Unlock this panel so it can be moved again (Ctrl+Shift+L)"
             : "Lock this panel in place (Ctrl+Shift+L)";
         // Locked is a state the user chose and can undo, so it earns the accent.
-        LockButton.Foreground = (Brush)FindResource(locked ? "AccentBrush" : "MutedBrush");
+        LockButton.SetResourceReference(ForegroundProperty, locked ? "AccentBrush" : "MutedBrush");
         ResizeHint.Visibility = locked || (Window.GetWindow(this) as PanelWindow)?.IsShaded == true
             ? Visibility.Collapsed
             : Visibility.Visible;
@@ -1165,7 +1165,7 @@ public partial class PanelHost : UserControl, IDisposable
         // Muted is a chosen state; audible-but-unmuted is worth a quieter hint so a panel making
         // noise off-screen can be found.
         var playing = Browser.CoreWebView2?.IsDocumentPlayingAudio == true;
-        MuteButton.Foreground = (Brush)FindResource(
+        MuteButton.SetResourceReference(ForegroundProperty,
             muted ? "WarnBrush" : playing ? "AccentBrush" : "MutedBrush");
     }
 
@@ -1518,7 +1518,7 @@ public partial class PanelHost : UserControl, IDisposable
         Definition.ContentScale = scale;
         ContentScaleText.Text = $"{scale * 100:0}%";
         // Off-default is worth noticing, but accent is reserved for state the user can act on.
-        ContentScaleText.Foreground = (Brush)FindResource(
+        ContentScaleText.SetResourceReference(TextBlock.ForegroundProperty,
             Math.Abs(scale - 1) < 0.01 ? "MutedBrush" : "TextBrush");
         if (Browser.CoreWebView2 is not null)
         {
@@ -1553,9 +1553,9 @@ public partial class PanelHost : UserControl, IDisposable
             SetSuggestionsOpen(false);
         }
 
-        OuterBorder.BorderBrush = (Brush)FindResource(active ? "AccentBrush" : "StrokeSubtleBrush");
-        KindStripe.Fill = (Brush)FindResource(active ? "AccentBrush" : "StrokeSubtleBrush");
-        DragSurface.Background = (Brush)FindResource(active ? "SurfaceActiveBrush" : "SurfaceRaisedBrush");
+        OuterBorder.SetResourceReference(Border.BorderBrushProperty, active ? "AccentBrush" : "StrokeSubtleBrush");
+        KindStripe.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, active ? "AccentBrush" : "StrokeSubtleBrush");
+        DragSurface.SetResourceReference(Border.BackgroundProperty, active ? "SurfaceActiveBrush" : "SurfaceRaisedBrush");
     }
 
     public void Dispose()

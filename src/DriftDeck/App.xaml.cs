@@ -20,6 +20,9 @@ public partial class App : Application
     /// </summary>
     internal static SessionSentinel? Sentinel { get; private set; }
 
+    /// <summary>The optional local theme. Applied before the first window so nothing flashes.</summary>
+    internal static ThemeService? Theme { get; private set; }
+
     /// <summary>
     /// Velopack runs first and alone: during install, update, and uninstall the updater starts
     /// this executable with its own arguments and expects it to exit without creating a window.
@@ -61,6 +64,17 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
         ApplyMotionPreference();
+        Theme = new ThemeService(Resources);
+        try
+        {
+            Theme.Apply();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Apply already contains per-slot faults. Anything reaching here is a bug in the
+            // loader itself, and the built-in look is a better outcome than no app at all.
+            Sentinel?.WriteCrashReport(exception, "Theme");
+        }
         base.OnStartup(e);
     }
 

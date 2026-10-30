@@ -2,7 +2,7 @@
 
 DriftDeck is an open-source Windows overlay workspace for games and other fullscreen or borderless applications. It provides independent, always-on-top browser, notes, checklist, timer, and image panels without inspecting or modifying the application underneath.
 
-DriftDeck does not read game memory or files, hook rendering, inject code, automate input, extract game state, or communicate with anti-cheat software.
+DriftDeck does not read game memory or game data, hook rendering, inject code, automate input, extract game state, or communicate with anti-cheat software. The one exception to staying out of a game's folder is opt-in: a local theme can read fonts and exported interface art from a folder you choose, and nothing else.
 
 ## Features
 
@@ -29,6 +29,7 @@ DriftDeck does not read game memory or files, hook rendering, inject code, autom
 - `Ctrl+Alt+1` to `Ctrl+Alt+9` load layouts without leaving the application underneath
 - Browser panels pause while the overlay is hidden, so nothing renders behind a game
 - Transparent workspace: only the dock and floating panels are rendered
+- Optional local theme that dresses the dock and panels in a game's own fonts and interface art, read from your game folder
 - Collapsible dock that shrinks to the bottom-right of the current monitor instead of the taskbar
 
 ## Using DriftDeck
@@ -183,6 +184,24 @@ Matching uses only the foreground window's process name and title, which Windows
 ### Recovery and crash logs
 
 DriftDeck writes the current layout within about 650 ms of every change, so an interrupted session loses nothing. If a run ends without quitting — most often because the game it was sitting over was killed with it — the next launch says so in the status strip and keeps a report in `%LOCALAPPDATA%\DriftDeck\logs`. `SETTINGS` has a button to open that folder. Logs are capped at 1 MB per file and the newest fourteen files are kept, so a repeated fault cannot fill the disk. Nothing is sent anywhere.
+
+### Themes
+
+DriftDeck can wear a game's own fonts and interface art. Under `SETTINGS` → Theme, **Use game
+folder…** writes `%LOCALAPPDATA%\DriftDeck\theme\theme.json` pointing at that folder and switches
+it on. The preset that ships with DriftDeck names files by path only: none of the art or fonts are
+in this repository or the installer, and nothing is copied out of the game folder.
+
+For World of Warcraft, the art has to exist on disk first. Add `-console` to the game's launch
+options, then on the login or character-select screen open the console and run
+`exportInterfaceFiles art`. The game writes a `BlizzardInterfaceArt` folder beside its executable,
+and DriftDeck reads the `.blp` textures in it directly. Fonts come from the game's `Fonts` folder.
+
+`theme.json` is plain JSON with comments. Every key under `resources` names a slot in `App.xaml`
+and replaces its value: a brush takes a colour or `{ "image", "crop", "tile", "opacity" }`, a font
+takes a `.ttf` path or an installed family name, and radii and sizes take numbers. A slot that
+cannot be loaded keeps its built-in look, and Settings lists which ones. **Reload** applies edits
+without restarting; **Turn off** goes back to the built-in look and leaves the file alone.
 
 ### Updates
 

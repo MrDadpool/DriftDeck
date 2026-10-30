@@ -5,8 +5,8 @@
         Width="900" Height="146" MinWidth="860" MinHeight="30" MaxHeight="146"
         WindowStyle="None" ResizeMode="CanResize"
         AllowsTransparency="True" Background="Transparent"
-        Foreground="{StaticResource TextBrush}"
-        FontFamily="Segoe UI"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource BodyFont}"
         Topmost="True" ShowInTaskbar="True">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="0" />
@@ -20,7 +20,7 @@
         </Grid.RowDefinitions>
 
         <!-- ================= Title strip ================= -->
-        <Border Grid.Row="0" Background="{StaticResource ConsoleHeaderBrush}" CornerRadius="7,7,0,0"
+        <Border Grid.Row="0" Background="{DynamicResource ConsoleHeaderBrush}" CornerRadius="7,7,0,0"
                 MouseLeftButtonDown="TitleBar_OnMouseLeftButtonDown">
             <Grid Margin="10,0,4,0">
                 <Grid.ColumnDefinitions>
@@ -30,12 +30,12 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="DRIFTDECK" FontFamily="Bahnschrift" FontWeight="SemiBold" FontSize="{StaticResource TextMd}"
+                    <TextBlock Text="DRIFTDECK" FontFamily="{DynamicResource DisplayFont}" FontWeight="SemiBold" FontSize="{StaticResource TextMd}"
                                VerticalAlignment="Center" />
                     <!-- The only accent in this strip: it reports a mode the user can change. -->
                     <Border x:Name="ModePill" Margin="8,0,0,0" Padding="6,1"
-                            Background="{StaticResource AccentPillBrush}" CornerRadius="7">
-                        <TextBlock x:Name="ModeText" Text="Interactive" Foreground="{StaticResource AccentBrush}"
+                            Background="{DynamicResource AccentPillBrush}" CornerRadius="7">
+                        <TextBlock x:Name="ModeText" Text="Interactive" Foreground="{DynamicResource AccentBrush}"
                                    FontSize="{StaticResource TextXs}" FontWeight="SemiBold" />
                     </Border>
                 </StackPanel>
@@ -56,7 +56,7 @@
         <!-- ================= Toolbar =================
              Padding is deliberately taller than the strips above and below: this is
              the only row that does work, and it should read that way. -->
-        <Border x:Name="DockToolbar" Grid.Row="1" Background="{StaticResource SurfaceBaseBrush}" Padding="14,10">
+        <Border x:Name="DockToolbar" Grid.Row="1" Background="{DynamicResource SurfaceBaseBrush}" Padding="14,10">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="32" />
@@ -96,7 +96,7 @@
                             SmallChange="1" LargeChange="5" ValueChanged="OverlayTransparencySlider_OnValueChanged"
                             ToolTip="Fades every panel together. Per-panel sliders still apply on top of this." />
                     <TextBlock x:Name="TransparencyValueText" Text="2%" Width="36" TextAlignment="Right"
-                               Foreground="{StaticResource TextBrush}" FontSize="{StaticResource TextSm}"
+                               Foreground="{DynamicResource TextBrush}" FontSize="{StaticResource TextSm}"
                                VerticalAlignment="Center" />
                 </StackPanel>
 
@@ -131,27 +131,27 @@
         </Border>
 
         <!-- ================= Status strip ================= -->
-        <Border Grid.Row="2" Background="{StaticResource SurfaceStatusBrush}" CornerRadius="0,0,7,7"
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceStatusBrush}" CornerRadius="0,0,7,7"
                 Padding="14,0" Height="24">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <Grid x:Name="StatusPanel" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="{StaticResource MutedBrush}"
+                    <Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="{DynamicResource MutedBrush}"
                              VerticalAlignment="Center" />
-                    <TextBlock x:Name="StatusText" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Grid.Column="1" Margin="8,0,12,0" Foreground="{StaticResource MutedBrush}"
+                    <TextBlock x:Name="StatusText" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Grid.Column="1" Margin="8,0,12,0" Foreground="{DynamicResource MutedBrush}"
                                FontSize="{StaticResource TextXs}" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
                 </Grid>
                 <TextBlock Grid.Column="1" Text="Layouts save automatically" FontFamily="Consolas"
-                           Foreground="{StaticResource MutedBrush}" FontSize="{StaticResource TextXs}"
+                           Foreground="{DynamicResource MutedBrush}" FontSize="{StaticResource TextXs}"
                            HorizontalAlignment="Right" VerticalAlignment="Center" />
             </Grid>
         </Border>
 
         <!-- Shown while pass-through is active, so the dock reads as inert. -->
-        <Border x:Name="PassThroughScrim" Grid.RowSpan="3" CornerRadius="{StaticResource FrameRadius}"
-                IsHitTestVisible="False" Background="{StaticResource ScrimBrush}"
-                BorderBrush="{StaticResource WarnBrush}" BorderThickness="1" Opacity="0" />
+        <Border x:Name="PassThroughScrim" Grid.RowSpan="3" CornerRadius="{DynamicResource FrameRadius}"
+                IsHitTestVisible="False" Background="{DynamicResource ScrimBrush}"
+                BorderBrush="{DynamicResource WarnBrush}" BorderThickness="1" Opacity="0" />
     </Grid>
 </Window>

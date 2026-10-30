@@ -84,6 +84,7 @@ public partial class SettingsWindow : Window
             ? $"Version {UpdateService.CurrentVersion.ToString(3)}"
             : $"Version {UpdateService.CurrentVersion.ToString(3)} · not installed by Setup, so it cannot update itself";
         CheckNowButton.IsEnabled = _updates.IsInstalled;
+        ShowThemeReport(App.Theme?.LastReport ?? ThemeReport.Off);
 
         // Edited copies, so cancelling leaves the running configuration untouched.
         foreach (var rule in settings.LayoutRules)
@@ -198,7 +199,7 @@ public partial class SettingsWindow : Window
         HintText.Text = "Listening. Press the shortcut you want, or Esc to stop.";
         if (sender is TextBox box)
         {
-            box.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+            box.SetResourceReference(BorderBrushProperty, "AccentBrush");
         }
     }
 
@@ -354,6 +355,112 @@ public partial class SettingsWindow : Window
                                               or System.ComponentModel.Win32Exception)
         {
             UpdateStatusText.Text = "The log folder could not be opened.";
+        }
+    }
+
+    // ============================ Theme ============================
+
+    /// <summary>
+    /// Theme changes apply at once rather than on Save. They repaint the running app, so there is
+    /// nothing for Cancel to protect, and seeing the result is the only way to judge a theme.
+    /// </summary>
+    private void ShowThemeReport(ThemeReport report)
+    {
+        var theme = App.Theme;
+        var hasFile = theme is not null && File.Exists(theme.FilePath);
+        ThemeStatusText.Text = report.IsActive
+            ? $"Using ‘{report.Name}’."
+            : hasFile ? "Theme is off. DriftDeck is using its built-in look." : "No theme. DriftDeck is using its built-in look.";
+        ThemeToggleButton.Content = report.IsActive ? "Turn off" : "Turn on";
+        ThemeToggleButton.IsEnabled = hasFile;
+        ThemeReloadButton.IsEnabled = theme is not null;
+
+        ThemeProblemsText.Text = string.Join(Environment.NewLine, report.Problems.Take(8)) +
+                                 (report.Problems.Count > 8 ? $"{Environment.NewLine}…and {report.Problems.Count - 8} more" : string.Empty);
+        ThemeProblemsText.Visibility = report.Problems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ThemeFolderButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (App.Theme is not { } theme)
+        {
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Choose the game folder that holds Fonts and BlizzardInterfaceArt"
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            theme.UseGameFolder(dialog.FolderName);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                              or InvalidDataException or InvalidOperationException
+                                              or System.Text.Json.JsonException)
+        {
+            ThemeStatusText.Text = $"The theme could not be saved: {exception.Message}";
+            return;
+        }
+
+        var report = theme.Apply();
+        ShowThemeReport(report);
+        if (!Directory.Exists(Path.Combine(dialog.FolderName, "BlizzardInterfaceArt")))
+        {
+            ThemeStatusText.Text += " No BlizzardInterfaceArt folder there yet, so only fonts and colours apply until the art is exported.";
+        }
+    }
+
+    private void ThemeToggleButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (App.Theme is not { } theme)
+        {
+            return;
+        }
+
+        try
+        {
+            theme.SetEnabled(!theme.LastReport.IsActive);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                              or InvalidDataException or System.Text.Json.JsonException)
+        {
+            ThemeStatusText.Text = $"The theme could not be changed: {exception.Message}";
+            return;
+        }
+
+        ShowThemeReport(theme.Apply());
+    }
+
+    private void ThemeReloadButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (App.Theme is { } theme)
+        {
+            ShowThemeReport(theme.Apply());
+        }
+    }
+
+    private void ThemeOpenButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (App.Theme is not { } theme)
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(theme.Directory);
+            Process.Start(new ProcessStartInfo(theme.Directory) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                              or System.ComponentModel.Win32Exception)
+        {
+            ThemeStatusText.Text = "The theme folder could not be opened.";
         }
     }
 

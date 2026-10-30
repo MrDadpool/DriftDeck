@@ -12,7 +12,8 @@ for path in root.rglob('*.xaml'):
     tree = ET.parse(path)
     source = path.read_text(encoding='utf-8-sig')
     local = {node.get(x + 'Key') for node in tree.iter()}
-    for key in re.findall(r'\{StaticResource ([\w]+)\}', source):
+    # A missing DynamicResource key fails silently at run time, so it is checked here too.
+    for key in re.findall(r'\{(?:Static|Dynamic)Resource ([\w]+)\}', source):
         assert key in keys | local, (path, key)
     code = Path(str(path) + '.cs').read_text()
     for handler in re.findall(r'="(\w+_On\w+)"', source):
@@ -28,4 +29,9 @@ panel = ET.parse(root / 'Controls' / 'PanelHost.xaml').getroot()
 title_height = float(panel.find('.//' + w + 'RowDefinition').get('Height'))
 shaded = float(re.search(r'ShadedHeight = (\d+)', (root / 'PanelWindow.cs').read_text())[1])
 assert shaded == title_height + 2, 'Rolled-up panels must include the title and frame'
-print('PASS: XAML, resource references, event handlers, dock and panel collapse geometry')
+# The game theme preset may only name slots that exist; ThemeService reports anything else.
+preset = (root / 'Themes' / 'game.theme.json').read_text(encoding='utf-8')
+for key in re.findall(r'^\s*"(\w+)":', preset.split('"resources": {', 1)[1], re.M):
+    assert key in keys, ('game.theme.json', key)
+
+print('PASS: XAML, resource references, theme preset slots, event handlers, dock and panel collapse geometry')
