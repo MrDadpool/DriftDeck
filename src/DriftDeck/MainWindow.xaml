@@ -149,6 +149,8 @@
             </Grid>
         </Border>
 
+        <Control Grid.RowSpan="3" Style="{StaticResource FrameArtLayer}" />
+
         <!-- Shown while pass-through is active, so the dock reads as inert. -->
         <Border x:Name="PassThroughScrim" Grid.RowSpan="3" CornerRadius="{DynamicResource FrameRadius}"
                 IsHitTestVisible="False" Background="{DynamicResource ScrimBrush}"

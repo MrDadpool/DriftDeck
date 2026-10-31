@@ -4,8 +4,9 @@
 //
 // This preset names files from a World of Warcraft install: fonts from its Fonts folder and
 // interface art from the BlizzardInterfaceArt folder the game writes when you run
-// "exportInterfaceFiles art" in its console. None of those files ship with DriftDeck; a slot
-// whose file is missing keeps its built-in look.
+// "exportInterfaceFiles art" in its console. The Forever client has neither on disk, so
+// scripts/Extract-GameArt.ps1 reads the same files out of the game's storage into this layout.
+// None of those files ship with DriftDeck; a slot whose file is missing keeps its built-in look.
 {
   "name": "Game art",
   "enabled": true,
@@ -29,8 +30,11 @@
 
     // Shown by browser panels before a page paints; WebView2 takes no image, only a colour.
     "SurfaceDeepColor": "#FF0C0906",
-    "SurfaceDeepBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Background.blp", "tile": 64, "opacity": 0.96 },
-    "SurfaceBaseBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Background.blp", "tile": 64, "opacity": 0.94 },
+    // The game's UI-DialogBox-Background is flat black at 60% alpha, made for frames over a
+    // dimly lit world. Over a bright desktop or a page it lets everything behind bleed through,
+    // so the same black is used here, nearly opaque.
+    "SurfaceDeepBrush": "#F5000000",
+    "SurfaceBaseBrush": "#EE000000",
     "SurfaceSunkenBrush": "#E60C0906",
     "SurfaceStatusBrush": "#F0120D08",
     "SurfaceTitleBrush": "#FC231910",
@@ -56,6 +60,22 @@
     "ButtonArtPressedMiddleBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Down.blp", "crop": [12, 0, 56, 22] },
     "ButtonArtPressedRightBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-Panel-Button-Down.blp", "crop": [68, 0, 12, 22] },
     "ButtonArtCapWidth": 17,
+
+    // Interface\DialogFrame\UI-DialogBox-Gold-Border: a 256 x 32 backdrop edge strip, eight
+    // 32 px tiles in the order left, right, top, bottom, then the four corners. The top and
+    // bottom tiles stand upright like the side ones, so they are turned a quarter clockwise.
+    "FrameArtSize": 24,
+    "FrameArtLeftBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [0, 0, 32, 32], "tile": 24 },
+    "FrameArtRightBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [32, 0, 32, 32], "tile": 24 },
+    "FrameArtTopBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [64, 0, 32, 32], "tile": 24, "rotate": 90 },
+    "FrameArtBottomBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [96, 0, 32, 32], "tile": 24, "rotate": 90 },
+    "FrameArtTopLeftBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [128, 0, 32, 32] },
+    "FrameArtTopRightBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [160, 0, 32, 32] },
+    "FrameArtBottomLeftBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [192, 0, 32, 32] },
+    "FrameArtBottomRightBrush": { "image": "BlizzardInterfaceArt/Interface/DialogFrame/UI-DialogBox-Gold-Border.blp", "crop": [224, 0, 32, 32] },
+
+    "CheckBoxArtBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-CheckBox-Up.blp" },
+    "CheckArtBrush": { "image": "BlizzardInterfaceArt/Interface/Buttons/UI-CheckBox-Check.blp" },
 
     "ControlRadius": 2,
     "FrameRadius": 3

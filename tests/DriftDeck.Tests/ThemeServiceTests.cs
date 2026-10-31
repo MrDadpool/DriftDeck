@@ -174,6 +174,45 @@ public class ThemeServiceTests : IDisposable
     }
 
     [Fact]
+    public void A_rotated_tile_turns_about_its_own_centre_so_tiles_stay_on_the_grid()
+    {
+        SavePng(Path.Combine(_directory, "edge.png"), 8, 8);
+        WriteTheme("""{ "resources": { "ButtonArtLeftBrush": { "image": "edge.png", "tile": 24, "rotate": 90 } } }""");
+
+        _theme.Apply();
+
+        var brush = Assert.IsType<ImageBrush>(_resources["ButtonArtLeftBrush"]);
+        var rotation = Assert.IsType<RotateTransform>(brush.Transform);
+        Assert.Equal((90d, 12d, 12d), (rotation.Angle, rotation.CenterX, rotation.CenterY));
+        Assert.True(brush.RelativeTransform.Value.IsIdentity);
+    }
+
+    [Fact]
+    public void A_rotated_stretched_image_turns_in_relative_space()
+    {
+        SavePng(Path.Combine(_directory, "corner.png"), 8, 8);
+        WriteTheme("""{ "resources": { "ButtonArtLeftBrush": { "image": "corner.png", "rotate": 180 } } }""");
+
+        _theme.Apply();
+
+        var brush = Assert.IsType<ImageBrush>(_resources["ButtonArtLeftBrush"]);
+        var rotation = Assert.IsType<RotateTransform>(brush.RelativeTransform);
+        Assert.Equal((180d, 0.5, 0.5), (rotation.Angle, rotation.CenterX, rotation.CenterY));
+    }
+
+    [Fact]
+    public void A_rotation_that_is_not_a_quarter_turn_is_reported()
+    {
+        SavePng(Path.Combine(_directory, "edge.png"), 8, 8);
+        WriteTheme("""{ "resources": { "ButtonArtLeftBrush": { "image": "edge.png", "rotate": 45 } } }""");
+
+        var report = _theme.Apply();
+
+        Assert.IsType<SolidColorBrush>(_resources["ButtonArtLeftBrush"]);
+        Assert.Contains(report.Problems, problem => problem.Contains("rotate"));
+    }
+
+    [Fact]
     public void Turning_the_theme_off_restores_every_built_in_value()
     {
         WriteTheme("""{ "resources": { "TextBrush": "#FFD100", "ControlRadius": 0 } }""");

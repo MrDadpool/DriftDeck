@@ -476,6 +476,33 @@ fails, tag v0.3.0.
 
 The Tier 4 batch is merged into `main` and, like everything since v0.2.0, has never been executed.
 
+**2026-10-30, first run on the owner's Windows PC (.NET SDK 10.0.403).**
+
+- `dotnet test DriftDeck.slnx`: 213 passing (210 before, plus three for brush rotation).
+  `scripts\check-ui.py` passes.
+- `scripts\Build-Installer.ps1` builds `DriftDeck.App-win-Setup.exe` 0.3.0. `Setup.exe --silent`
+  installs per-user into `%LOCALAPPDATA%\DriftDeck.App` with no admin prompt and adds Desktop and
+  Start-menu shortcuts. The installed build starts (custom `App.Main` works), a second launch
+  leaves one process (single-instance works), and the theme applies. Silent install does not
+  launch the app afterwards.
+- Bug found and fixed: a YouTube panel showed "This page could not be loaded (ConnectionAborted)"
+  over a page that had loaded. The aborted navigation was a superseded one; errors now come only
+  from the latest `NavigationId`.
+- Forever install verified at `F:\Battle.net\World of Warcraft\_forever_`, product `wowf`,
+  build 1.60.1.70707. Fonts there are `.slug` (named by file data ID: 615960 is FRIZQT__.TTF) and
+  there is no `BlizzardInterfaceArt`. CASCConsole 1.0.240 reads the local storage and the retail
+  file data IDs match, so `scripts\Extract-GameArt.ps1` now extracts the theme's files.
+- Theme: frame art (nine-slice `FrameArt*` slots, `FrameArtLayer` style over the dock and every
+  panel), check box art, a `rotate` brush option for the upright top/bottom border tiles, and
+  near-opaque black surfaces. The game's dialog background is flat black at 60% alpha and let
+  desktop text bleed through.
+- Sign-ins not persisting: the August build kept its WebView2 profile in
+  `artifacts\DriftDeck-win-x64\DriftDeck.exe.WebView2`, which each rebuild deleted. Current code
+  keeps it in `%LOCALAPPDATA%\DriftDeck\webview2`, outside both the build and install folders.
+
+Still unchecked from the smoke list: uninstall, the bookmarks picker, gather, hide/restore
+suspend, monitor unplug and resume, and the per-panel shortcuts.
+
 ## Next up
 
 ### Blocking the first release

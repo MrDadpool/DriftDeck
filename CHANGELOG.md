@@ -15,6 +15,20 @@ First published release. Everything below is new to anyone who has not built fro
   interface art and names files by path only, so no game art ships with DriftDeck. Textures in
   Blizzard's BLP format are decoded directly, and a slot whose file is missing keeps its
   built-in look.
+- **Gold frames and check boxes.** Themes can now draw nine-slice frame art around the dock and
+  every panel, and artwork for check boxes. The World of Warcraft preset uses the game's gold
+  dialog border, its check box and tick, and near-opaque black surfaces in place of the game's
+  60% dialog background, which let desktop text bleed through.
+- **World of Warcraft: Forever.** That client keeps its fonts as `.slug` files and has no
+  exported art on disk, so `scripts\Extract-GameArt.ps1` reads the preset's fonts and textures
+  out of the game's own storage into `%LOCALAPPDATA%\DriftDeck\theme\game` and points the theme
+  there. Nothing is written into the game folder.
+
+### Fixes
+
+- A browser panel no longer covers a page that loaded with "This page could not be loaded".
+  Sites that replace their first navigation, YouTube among them, report the replaced one as
+  aborted after the new page has painted; only the latest navigation can show an error now.
 
 ### Overlay reliability
 

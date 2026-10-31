@@ -197,8 +197,21 @@ options, then on the login or character-select screen open the console and run
 `exportInterfaceFiles art`. The game writes a `BlizzardInterfaceArt` folder beside its executable,
 and DriftDeck reads the `.blp` textures in it directly. Fonts come from the game's `Fonts` folder.
 
+World of Warcraft: Forever keeps its fonts as precompiled `.slug` files, which DriftDeck cannot
+read. From a clone of this repository, run
+
+```
+.\scripts\Extract-GameArt.ps1 -GameFolder 'F:\Battle.net\World of Warcraft'
+```
+
+with your own install folder. It downloads CASCConsole from
+[WoW-Tools/CASCExplorer](https://github.com/WoW-Tools/CASCExplorer) into `artifacts\tools`, reads
+the fonts and textures the preset names out of the game's local storage, puts them under
+`%LOCALAPPDATA%\DriftDeck\theme\game`, and points the theme there. Nothing is written into the game
+folder. Run it again after a game patch. Pass `-Product wow` for the retail client.
+
 `theme.json` is plain JSON with comments. Every key under `resources` names a slot in `App.xaml`
-and replaces its value: a brush takes a colour or `{ "image", "crop", "tile", "opacity" }`, a font
+and replaces its value: a brush takes a colour or `{ "image", "crop", "tile", "rotate", "opacity" }`, a font
 takes a `.ttf` path or an installed family name, and radii and sizes take numbers. A slot that
 cannot be loaded keeps its built-in look, and Settings lists which ones. **Reload** applies edits
 without restarting; **Turn off** goes back to the built-in look and leaves the file alone.

@@ -209,9 +209,11 @@ public sealed class ThemeService
 
     /// <summary>
     /// A brush is either a colour string or an image object:
-    /// <c>{ "image": "path", "crop": [x, y, w, h], "tile": 64, "opacity": 0.9 }</c>.
+    /// <c>{ "image": "path", "crop": [x, y, w, h], "tile": 64, "rotate": 90, "opacity": 0.9 }</c>.
     /// <c>crop</c> is in source pixels, so slices can be copied straight from the game's own
-    /// texture coordinates; <c>tile</c> repeats the image at that size instead of stretching it.
+    /// texture coordinates; <c>tile</c> repeats the image at that size instead of stretching it;
+    /// <c>rotate</c> turns it clockwise in quarter turns, because game border textures store the
+    /// top and bottom edges standing upright beside the side edges.
     /// </summary>
     private static Brush ReadBrush(JsonElement value, string baseDirectory, Dictionary<string, BitmapSource> images)
     {
@@ -251,6 +253,25 @@ public sealed class ThemeService
             brush.TileMode = TileMode.Tile;
             brush.Viewport = new Rect(0, 0, size, size);
             brush.ViewportUnits = BrushMappingMode.Absolute;
+        }
+        if (value.TryGetProperty("rotate", out var rotate))
+        {
+            var angle = ReadNumber(rotate);
+            if (angle % 90 != 0)
+            {
+                throw new FormatException("rotate must be 0, 90, 180, or 270");
+            }
+            // A tiled brush turns the whole tiled plane about the first tile's centre, which
+            // keeps the tiles on their grid. A stretched one turns in relative space instead, so
+            // the image still fills whatever shape it is painted into.
+            if (brush.TileMode == TileMode.Tile)
+            {
+                brush.Transform = new RotateTransform(angle, brush.Viewport.Width / 2, brush.Viewport.Height / 2);
+            }
+            else
+            {
+                brush.RelativeTransform = new RotateTransform(angle, 0.5, 0.5);
+            }
         }
         if (value.TryGetProperty("opacity", out var opacity))
         {

@@ -49,6 +49,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
+    <Grid>
     <Border x:Name="OuterBorder" BorderBrush="{DynamicResource StrokeSubtleBrush}" BorderThickness="1"
             CornerRadius="{DynamicResource FrameRadius}" Background="{DynamicResource SurfaceBaseBrush}">
         <Grid>
@@ -418,4 +419,6 @@
                   Data="M 3,13 L 13,3 M 8,13 L 13,8" Stroke="{DynamicResource MutedBrush}" StrokeThickness="1" />
         </Grid>
     </Border>
+    <Control Style="{StaticResource FrameArtLayer}" />
+    </Grid>
 </UserControl>

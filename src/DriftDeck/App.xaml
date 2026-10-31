@@ -86,6 +86,22 @@
         <SolidColorBrush x:Key="ButtonArtPressedRightBrush" Color="Transparent" />
         <sys:Double x:Key="ButtonArtCapWidth">0</sys:Double>
 
+        <!-- Nine-slice frame artwork drawn over the edge of the dock and every panel: four
+             corners, four edges, all FrameArtSize square. Same rule as the button art: nothing
+             shows until a theme supplies it. -->
+        <SolidColorBrush x:Key="FrameArtTopLeftBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtTopBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtTopRightBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtLeftBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtRightBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtBottomLeftBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtBottomBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="FrameArtBottomRightBrush" Color="Transparent" />
+        <sys:Double x:Key="FrameArtSize">0</sys:Double>
+
+        <SolidColorBrush x:Key="CheckBoxArtBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="CheckArtBrush" Color="Transparent" />
+
         <FontFamily x:Key="BodyFont">Segoe UI</FontFamily>
         <FontFamily x:Key="DisplayFont">Bahnschrift</FontFamily>
 
@@ -600,17 +616,25 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
                         <StackPanel Orientation="Horizontal" Background="Transparent" MinHeight="24">
-                            <Border x:Name="Box" Width="17" Height="17" VerticalAlignment="Center" CornerRadius="3"
-                                    Background="{DynamicResource SurfaceSunkenBrush}"
-                                    BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1">
-                                <Path x:Name="Check" Data="M 2,7 L 6,11 L 13,3" Stroke="{DynamicResource AccentBrush}"
-                                      StrokeThickness="2" Opacity="0" />
-                            </Border>
+                            <Grid VerticalAlignment="Center">
+                                <Border x:Name="Box" Width="17" Height="17" CornerRadius="3"
+                                        Background="{DynamicResource SurfaceSunkenBrush}"
+                                        BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1">
+                                    <Path x:Name="Check" Data="M 2,7 L 6,11 L 13,3" Stroke="{DynamicResource AccentBrush}"
+                                          StrokeThickness="2" Opacity="0" />
+                                </Border>
+                                <!-- Theme artwork, drawn a little larger than the box because game
+                                     check box textures carry their own margin. -->
+                                <Rectangle Margin="-5" Fill="{DynamicResource CheckBoxArtBrush}" IsHitTestVisible="False" />
+                                <Rectangle x:Name="CheckArt" Margin="-5" Fill="{DynamicResource CheckArtBrush}"
+                                           IsHitTestVisible="False" Opacity="0" />
+                            </Grid>
                             <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Check" Property="Opacity" Value="1" />
+                                <Setter TargetName="CheckArt" Property="Opacity" Value="1" />
                                 <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -633,6 +657,46 @@
             <Setter Property="FontSize" Value="{StaticResource TextXs}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- ==================== Frame artwork ====================
+             Laid over a window's whole frame, never hit-testable, so it decorates without
+             taking a click from what lies under it. Zero-sized until a theme sets FrameArtSize. -->
+        <Style x:Key="FrameArtLayer" TargetType="Control">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Control">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <!-- Corners fix the size of the outer rows and columns; edges stretch between them. -->
+                            <Rectangle Width="{DynamicResource FrameArtSize}" Height="{DynamicResource FrameArtSize}"
+                                       Fill="{DynamicResource FrameArtTopLeftBrush}" />
+                            <Rectangle Grid.Column="2" Width="{DynamicResource FrameArtSize}" Height="{DynamicResource FrameArtSize}"
+                                       Fill="{DynamicResource FrameArtTopRightBrush}" />
+                            <Rectangle Grid.Row="2" Width="{DynamicResource FrameArtSize}" Height="{DynamicResource FrameArtSize}"
+                                       Fill="{DynamicResource FrameArtBottomLeftBrush}" />
+                            <Rectangle Grid.Row="2" Grid.Column="2" Width="{DynamicResource FrameArtSize}" Height="{DynamicResource FrameArtSize}"
+                                       Fill="{DynamicResource FrameArtBottomRightBrush}" />
+                            <Rectangle Grid.Column="1" Fill="{DynamicResource FrameArtTopBrush}" />
+                            <Rectangle Grid.Row="2" Grid.Column="1" Fill="{DynamicResource FrameArtBottomBrush}" />
+                            <Rectangle Grid.Row="1" Fill="{DynamicResource FrameArtLeftBrush}" />
+                            <Rectangle Grid.Row="1" Grid.Column="2" Fill="{DynamicResource FrameArtRightBrush}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
     </Application.Resources>
