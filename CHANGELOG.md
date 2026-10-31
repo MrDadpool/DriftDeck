@@ -3,7 +3,7 @@
 This file records what changed between published releases. Dates are the release date, not the
 date the work was done.
 
-## v0.3.0 — unreleased
+## v0.3.0 — 2026-10-30
 
 First published release. Everything below is new to anyone who has not built from source.
 
