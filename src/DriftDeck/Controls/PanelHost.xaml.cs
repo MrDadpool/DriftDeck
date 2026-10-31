@@ -32,6 +32,7 @@ public partial class PanelHost : UserControl, IDisposable
     private double _dimFactor = 1;
     private bool _suppressAddressUpdate;
     private bool _suspended;
+    private ulong _latestNavigationId;
     private readonly ObservableCollection<ChecklistItem> _checklist = [];
     private DispatcherTimer? _timerTick;
     private TimerState _timer;
@@ -244,6 +245,7 @@ public partial class PanelHost : UserControl, IDisposable
 
     private void Core_OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
+        _latestNavigationId = e.NavigationId;
         HideBrowserError();
         StartLoadingBar();
     }
@@ -263,7 +265,10 @@ public partial class PanelHost : UserControl, IDisposable
             }
         }
 
-        if (e.IsSuccess || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled)
+        // A navigation that a newer one replaced reports ConnectionAborted after the newer page
+        // has already painted, so only the latest navigation may put an error over the page.
+        if (e.IsSuccess || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled
+            || e.NavigationId != _latestNavigationId)
         {
             return;
         }
