@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using DriftDeck.Models;
 
@@ -7,7 +7,8 @@ namespace DriftDeck.Services;
 public sealed class LayoutStore
 {
     private const string LastLayoutFileName = "last-layout.txt";
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    public string? LoadWarning { get; private set; }
+    private readonly SemaphoreSlim _writes = new(1, 1);
     private readonly string _layoutDirectory;
 
     public LayoutStore()
@@ -38,103 +39,74 @@ public sealed class LayoutStore
                 : "Default";
             return await LoadAsync(string.IsNullOrWhiteSpace(name) ? "Default" : name);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            LoadWarning = $"Could not restore the last layout: {exception.Message}";
             return OverlayLayout.CreateDefault();
         }
     }
 
-    public async Task<OverlayLayout> LoadAsync(string name)
+    public Task<OverlayLayout> LoadAsync(string name)
     {
         var safeName = NormalizeName(name);
-        var filePath = GetLayoutPath(safeName);
-        try
+        var layout = JsonFile.Read<OverlayLayout>(GetLayoutPath(safeName), out var warning)
+                     ?? OverlayLayout.CreateDefault();
+        LoadWarning = warning;
+        layout.Name = safeName;
+        layout.Panels ??= [];
+        layout.RecentUrls ??= [];
+        if (layout.Version < 2)
         {
-            if (!File.Exists(filePath))
+            foreach (var panel in layout.Panels)
             {
-                var freshLayout = OverlayLayout.CreateDefault();
-                freshLayout.Name = safeName;
-                return freshLayout;
+                panel.X += layout.Left;
+                panel.Y += layout.Top + 94;
             }
-
-            await using var stream = File.OpenRead(filePath);
-            var layout = await JsonSerializer.DeserializeAsync<OverlayLayout>(stream, JsonOptions)
-                         ?? OverlayLayout.CreateDefault();
-            layout.Name = safeName;
-            layout.Panels ??= [];
-            layout.RecentUrls ??= [];
-            if (layout.Version < 2)
-            {
-                foreach (var panel in layout.Panels)
-                {
-                    panel.X += layout.Left;
-                    panel.Y += layout.Top + 94;
-                }
-
-                layout.Height = 94;
-            }
-
-            // Version 3 only adds RecentUrls, which defaults to empty, so there is nothing to
-            // convert — the number is stamped so a future change can tell the two apart.
-            layout.Version = 3;
-
-            if (layout.Panels.Count == 0)
-            {
-                layout.Panels.Add(PanelDefinition.CreateBrowser(24, 24));
-            }
-
-            return layout;
+            layout.Height = 94;
         }
-        catch (JsonException)
-        {
-            return OverlayLayout.CreateDefault();
-        }
-        catch (IOException)
-        {
-            return OverlayLayout.CreateDefault();
-        }
+        layout.Version = 3;
+        return Task.FromResult(layout);
     }
 
-    public async Task SaveAsync(OverlayLayout layout)
+    public Task SaveAsync(OverlayLayout layout)
     {
         layout.Name = NormalizeName(layout.Name);
-        Directory.CreateDirectory(_layoutDirectory);
-
-        var filePath = GetLayoutPath(layout.Name);
-        var temporaryPath = filePath + ".tmp";
-        await using (var stream = File.Create(temporaryPath))
-        {
-            await JsonSerializer.SerializeAsync(stream, layout, JsonOptions);
-        }
-
-        File.Move(temporaryPath, filePath, true);
-        await File.WriteAllTextAsync(Path.Combine(_layoutDirectory, LastLayoutFileName), layout.Name);
+        return SaveSnapshotAsync(layout, layout.Name, makeCurrent: true);
     }
 
-    /// <summary>
-    /// Writes the layout under a different name without changing which layout is "current",
-    /// so duplicating never moves the user off the layout they are editing.
-    /// </summary>
-    public async Task SaveCopyAsync(OverlayLayout layout, string copyName)
+    public Task SaveCopyAsync(OverlayLayout layout, string copyName) =>
+        SaveSnapshotAsync(layout, copyName, makeCurrent: false);
+
+    private async Task SaveSnapshotAsync(OverlayLayout layout, string name, bool makeCurrent)
     {
-        var originalName = layout.Name;
-        Directory.CreateDirectory(_layoutDirectory);
-        var safeName = NormalizeName(copyName);
-        var filePath = GetLayoutPath(safeName);
-        var temporaryPath = filePath + ".tmp";
+        // A copy must not rename the live layout while another save is suspended.
+        var snapshot = JsonSerializer.Deserialize<OverlayLayout>(JsonSerializer.Serialize(layout))!;
+        snapshot.Name = NormalizeName(name);
+        await _writes.WaitAsync();
         try
         {
-            layout.Name = safeName;
-            await using (var stream = File.Create(temporaryPath))
+            await JsonFile.WriteAsync(GetLayoutPath(snapshot.Name), snapshot, overwrite: makeCurrent);
+            if (makeCurrent)
             {
-                await JsonSerializer.SerializeAsync(stream, layout, JsonOptions);
+                var lastPath = Path.Combine(_layoutDirectory, LastLayoutFileName);
+                await File.WriteAllTextAsync(lastPath + ".tmp", snapshot.Name);
+                File.Move(lastPath + ".tmp", lastPath, true);
             }
-
-            File.Move(temporaryPath, filePath, true);
         }
         finally
         {
-            layout.Name = originalName;
+            _writes.Release();
+        }
+    }
+
+    public string SuggestCopyName(string name)
+    {
+        var stem = NormalizeName(name);
+        for (var number = 1; ; number++)
+        {
+            var suffix = number == 1 ? " Copy" : $" Copy {number}";
+            var candidate = stem[..Math.Min(stem.Length, 40 - suffix.Length)] + suffix;
+            if (!Exists(candidate)) return candidate;
         }
     }
 
@@ -163,7 +135,7 @@ public sealed class LayoutStore
 
             return names;
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return ["Default"];
         }
@@ -172,7 +144,7 @@ public sealed class LayoutStore
     public static string NormalizeName(string? name)
     {
         var trimmed = string.IsNullOrWhiteSpace(name) ? "Default" : name.Trim();
-        var invalidCharacters = Path.GetInvalidFileNameChars();
+        var invalidCharacters = Path.GetInvalidFileNameChars().Concat("<>:\"/\\|?*").ToHashSet();
         var normalized = new string(trimmed
             .Where(character => !invalidCharacters.Contains(character))
             .Take(40)
@@ -196,6 +168,8 @@ public sealed class LayoutStore
                 return false;
             }
 
+            File.Delete(filePath + ".bak");
+            File.Delete(filePath + ".tmp");
             File.Delete(filePath);
             return true;
         }

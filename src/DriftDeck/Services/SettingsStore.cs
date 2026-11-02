@@ -1,48 +1,34 @@
 using System.IO;
-using System.Text.Json;
 using DriftDeck.Models;
 
 namespace DriftDeck.Services;
 
 public sealed class SettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly string _filePath;
+    public string? LoadWarning { get; private set; }
 
-    public SettingsStore()
+    public SettingsStore() : this(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DriftDeck", "settings.json"))
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _filePath = Path.Combine(appData, "DriftDeck", "settings.json");
+    }
+
+    public SettingsStore(string filePath)
+    {
+        _filePath = filePath;
     }
 
     public AppSettings Load()
     {
-        try
-        {
-            if (!File.Exists(_filePath))
-            {
-                return new AppSettings();
-            }
-
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
-        }
-        catch (JsonException)
-        {
-            return new AppSettings();
-        }
-        catch (IOException)
-        {
-            return new AppSettings();
-        }
+        var settings = JsonFile.Read<AppSettings>(_filePath, out var warning);
+        LoadWarning = warning;
+        settings ??= new AppSettings();
+        settings.Bookmarks ??= [];
+        settings.LayoutRules ??= [];
+        settings.QuickLayouts ??= [];
+        return settings;
     }
 
-    public async Task SaveAsync(AppSettings settings)
-    {
-        var directory = Path.GetDirectoryName(_filePath)!;
-        Directory.CreateDirectory(directory);
-        var temporaryPath = _filePath + ".tmp";
-        await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(settings, JsonOptions));
-        File.Move(temporaryPath, _filePath, true);
-    }
+    public Task SaveAsync(AppSettings settings) => JsonFile.WriteAsync(_filePath, settings);
 }

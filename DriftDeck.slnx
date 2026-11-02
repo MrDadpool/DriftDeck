@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="src/DriftDeck/DriftDeck.csproj" />
   <Project Path="tests/DriftDeck.Tests/DriftDeck.Tests.csproj" />
+  <Project Path="tests/DriftDeck.Persistence.Tests/DriftDeck.Persistence.Tests.csproj" />
 </Solution>

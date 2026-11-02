@@ -213,14 +213,13 @@ public class LayoutStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task A_layout_with_no_panels_gains_a_browser_panel()
+    public async Task A_layout_with_no_panels_stays_empty()
     {
         var layout = Layout("Racing");
         layout.Panels.Clear();
         await _store.SaveAsync(layout);
 
-        var panel = Assert.Single((await _store.LoadAsync("Racing")).Panels);
-        Assert.Equal(PanelKind.Browser, panel.Kind);
+        Assert.Empty((await _store.LoadLastAsync()).Panels);
     }
 
     [Fact]
@@ -311,4 +310,110 @@ public class LayoutStoreTests : IDisposable
         Assert.Equal(10, panel.X);
         Assert.Equal(20, panel.Y);
     }
+    [Fact]
+    public async Task Overlapping_saves_capture_each_layout_and_restore_the_latest()
+    {
+        var layout = Layout("Racing");
+        var saves = new List<Task>();
+        for (var i = 0; i < 30; i++)
+        {
+            layout.Panels[0].Notes = $"note {i}";
+            saves.Add(_store.SaveAsync(layout));
+        }
+        await Task.WhenAll(saves);
+        Assert.Equal("note 29", Assert.Single((await _store.LoadLastAsync()).Panels).Notes);
+    }
+
+    [Fact]
+    public async Task Copy_does_not_rename_a_live_layout_during_another_save()
+    {
+        var layout = Layout("Racing");
+        var copy = _store.SaveCopyAsync(layout, "Other");
+        Assert.Equal("Racing", layout.Name);
+        var save = _store.SaveAsync(layout);
+        await Task.WhenAll(copy, save);
+        Assert.Equal("Racing", (await _store.LoadLastAsync()).Name);
+        Assert.Equal("Other", (await _store.LoadAsync("Other")).Name);
+    }
+
+    [Fact]
+    public async Task A_damaged_primary_recovers_the_backup_and_keeps_it_after_saving()
+    {
+        var layout = Layout("Racing");
+        layout.Panels[0].Notes = "keep me";
+        await _store.SaveAsync(layout);
+        await _store.SaveAsync(layout);
+        await File.WriteAllTextAsync(Path.Combine(_directory, "Racing.json"), "broken");
+        var recovered = await _store.LoadLastAsync();
+        Assert.Equal("keep me", Assert.Single(recovered.Panels).Notes);
+        Assert.Contains("Recovered", _store.LoadWarning);
+        await _store.SaveAsync(recovered);
+        Assert.Single(Directory.GetFiles(_directory, "Racing.json.corrupt-*"));
+        Assert.Contains("keep me", await File.ReadAllTextAsync(Path.Combine(_directory, "Racing.json.bak")));
+    }
+
+    [Fact]
+    public async Task Deleting_a_layout_also_removes_its_recoverable_backup()
+    {
+        await _store.SaveAsync(Layout("Racing"));
+        await _store.SaveAsync(Layout("Racing"));
+        Assert.True(_store.Delete("Racing"));
+        Assert.False(File.Exists(Path.Combine(_directory, "Racing.json.bak")));
+    }
+
+    [Fact]
+    public async Task Panel_preferences_and_collapsed_dock_survive_restart()
+    {
+        var layout = Layout("Racing");
+        layout.IsDockCollapsed = true;
+        layout.Opacity = 0.61;
+        var panel = layout.Panels[0];
+        panel.ContentScale = 1.3;
+        panel.Opacity = 0.72;
+        panel.IsCollapsed = true;
+        panel.RestoreHeight = 550;
+        panel.IsLocked = true;
+        panel.IsMuted = true;
+        panel.HasCustomTitle = true;
+        panel.Title = "My reference";
+        await _store.SaveAsync(layout);
+        var restored = await new LayoutStore(_directory).LoadLastAsync();
+        Assert.True(restored.IsDockCollapsed);
+        Assert.Equal(0.61, restored.Opacity);
+        var actual = Assert.Single(restored.Panels);
+        Assert.Equal(1.3, actual.ContentScale);
+        Assert.Equal(0.72, actual.Opacity);
+        Assert.True(actual.IsCollapsed);
+        Assert.True(actual.IsLocked);
+        Assert.True(actual.IsMuted);
+        Assert.True(actual.HasCustomTitle);
+        Assert.Equal(550, actual.RestoreHeight);
+        Assert.Equal("My reference", actual.Title);
+    }
+
+    [Fact]
+    public async Task Copying_cannot_overwrite_an_existing_layout()
+    {
+        var original = Layout("Racing");
+        original.Panels[0].Notes = "original";
+        await _store.SaveAsync(original);
+        var other = Layout("Other");
+        await Assert.ThrowsAsync<IOException>(() => _store.SaveCopyAsync(other, "Racing"));
+        Assert.Equal("original", Assert.Single((await _store.LoadAsync("Racing")).Panels).Notes);
+    }
+
+    [Fact]
+    public async Task A_long_layout_name_gets_distinct_copy_names_that_fit()
+    {
+        var original = Layout(new string('a', 40));
+        await _store.SaveAsync(original);
+        var first = _store.SuggestCopyName(original.Name);
+        Assert.NotEqual(original.Name, first);
+        Assert.True(first.Length <= 40);
+        await _store.SaveCopyAsync(original, first);
+        var second = _store.SuggestCopyName(original.Name);
+        Assert.NotEqual(first, second);
+        Assert.True(second.Length <= 40);
+    }
+
 }

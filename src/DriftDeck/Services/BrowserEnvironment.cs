@@ -19,6 +19,27 @@ public static class BrowserEnvironment
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static CoreWebView2Environment? _environment;
 
+    public static async Task CloseAsync(Action closeBrowsers)
+    {
+        var environment = _environment;
+        if (environment is null)
+        {
+            closeBrowsers();
+            return;
+        }
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnExited(object? sender, CoreWebView2BrowserProcessExitedEventArgs args) => exited.TrySetResult();
+        environment.BrowserProcessExited += OnExited;
+        try
+        {
+            closeBrowsers();
+            // Let WebView2 finish writing its own profile before the host process exits.
+            await exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (TimeoutException) { }
+        finally { environment.BrowserProcessExited -= OnExited; }
+    }
+
     /// <summary>Where the shared browser profile lives. Never written into layout JSON.</summary>
     public static string UserDataFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

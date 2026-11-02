@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <!-- Compile the production persistence code directly so its real file operations can also
+       be tested on machines without the Windows desktop runtime. -->
+  <ItemGroup>
+    <Compile Include="../../src/DriftDeck/Models/*.cs" Link="Models/%(Filename)%(Extension)" />
+    <Compile Include="../../src/DriftDeck/Services/JsonFile.cs" Link="Services/JsonFile.cs" />
+    <Compile Include="../../src/DriftDeck/Services/LayoutStore.cs" Link="Services/LayoutStore.cs" />
+    <Compile Include="../../src/DriftDeck/Services/SettingsStore.cs" Link="Services/SettingsStore.cs" />
+    <Compile Include="../DriftDeck.Tests/LayoutStoreTests.cs" Link="LayoutStoreTests.cs" />
+    <Compile Include="../DriftDeck.Tests/SettingsStoreTests.cs" Link="SettingsStoreTests.cs" />
+  </ItemGroup>
+</Project>

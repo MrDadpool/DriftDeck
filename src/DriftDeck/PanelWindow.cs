@@ -281,7 +281,11 @@ public sealed class PanelWindow : Window
         Motion.To(this, OpacityProperty, 0, targetOpacity, Motion.Fast);
     }
 
-    public void SetClickThrough(bool enabled) => _windowService?.SetClickThrough(enabled);
+    public void SetClickThrough(bool enabled)
+    {
+        _windowService?.SetClickThrough(enabled);
+        BrowserPopupWindow.SetClickThrough(this, enabled);
+    }
 
     /// <summary>
     /// Pulls the panel back onto a monitor that still exists after the display set changed.

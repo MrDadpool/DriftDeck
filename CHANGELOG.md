@@ -3,7 +3,16 @@
 This file records what changed between published releases. Dates are the release date, not the
 date the work was done.
 
-## v0.3.0 — 2026-10-30
+## Unreleased
+
+- Simplify the dock to Add panel, a layout selector, Pass through, and More. Selecting a layout switches directly; normal edits need no Save button.
+- Wait for final layout writes and browser disposal before exiting. Failed saves keep the current session open and no longer produce a success message.
+- Serialize overlapping writes, retain last-good backups, and preserve unreadable originals during recovery.
+- Preserve intentionally empty layouts, the collapsed dock, saved mute choices, and the last visited URL instead of unfinished address input.
+- Keep browser sign-in popups connected to their original page and enable WebView2's password-save prompt.
+- Add portable persistence regression coverage. Windows sign-in and visual smoke checks remain required before release.
+
+## v0.3.0 — unreleased
 
 First published release. Everything below is new to anyone who has not built from source.
 

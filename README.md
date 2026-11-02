@@ -48,9 +48,10 @@ Start DriftDeck and use the dock to add panels. Every panel is a separate deskto
 
 ### Dock
 
-- `+ Web`, `+ Notes`, `+ List`, `+ Timer`, and `+ Image` create a panel of that kind.
-- `Fade` changes all panel windows, including their content.
-- The speaker button mutes or unmutes every browser panel at once.
+- **Add panel** opens a menu for web pages, notes, checklists, timers, and images. The keyboard shortcuts still create them directly.
+- Choose a layout to switch immediately. Changes save automatically; **More** contains named copies, deletion, and panel recovery.
+- **More > Fade panels** changes all panel windows, including their content.
+- **More > Mute all browsers** mutes or unmutes every browser panel at once.
 - `_` collapses the dock to a 340 x 30 strip at the bottom-right of its current monitor.
 - `□` restores a collapsed dock to its exact previous position and size.
 - Closing the dock exits DriftDeck and closes all panels.
@@ -90,7 +91,7 @@ Shortcuts are configurable under `SETTINGS`. Saved settings from an existing ins
 ### Finding lost panels
 
 A panel dragged onto a monitor that is later switched off, or simply dragged past the edge of the
-desktop, has no handle left to grab — the title bar went with it. The dock's **fit-page** button
+desktop, has no handle left to grab — the title bar went with it. The dock's **More > Bring panels to this monitor** command
 brings every panel back onto the monitor the dock is on, cascading them so each title bar stays
 clickable. Sizes are left alone, and locked panels are moved too: the lock exists to refuse
 accidental drags, not deliberate commands.
@@ -102,21 +103,21 @@ copies the whole note out — otherwise notes live only inside the layout file.
 
 ### Checklists
 
-`+ List` or `Ctrl+K`. Type an item and press Enter; the box stays put under the list so a burst
+**Add panel > Checklist** or `Ctrl+K`. Type an item and press Enter; the box stays put under the list so a burst
 of items never needs the mouse. The footer counts what is **left**, not what is done. Remove
 buttons appear only on the row you point at, and **Clear done** appears only once something is
 ticked. Items are cut at 200 characters rather than refused, so a paste still lands.
 
 ### Timers
 
-`+ Timer` or `Ctrl+T`. Set a length — a bare number is minutes, so `5`, `5:00`, `90`, and
+**Add panel > Timer** or `Ctrl+T`. Set a length — a bare number is minutes, so `5`, `5:00`, `90`, and
 `1:30:00` all work — then start, pause, or reset. A running timer is saved as the moment it ends,
 so it stays right through a roll-up, a layout switch, or a restart. At zero the readout turns
 amber and stops. It makes no sound and takes no focus: an overlay must not interrupt a game.
 
 ### Image panels
 
-`+ Image` or `Ctrl+I`. Drop a file on the panel, paste with `Ctrl+V`, or use **Choose image**.
+**Add panel > Image** or `Ctrl+I`. Drop a file on the panel, paste with `Ctrl+V`, or use **Choose image**.
 A panel points at your file rather than copying it, so moving or deleting the file shows a plain
 "file is missing" note instead of a stale copy. Pasted images have no file behind them, so they
 are saved as PNG under `%LOCALAPPDATA%\DriftDeck\pasted-images`, and ones no layout uses any more
@@ -131,7 +132,7 @@ into a panel toolbar mid-game is the interaction worth avoiding.
 
 ### Layouts
 
-A layout stores dock geometry, panel types, desktop coordinates, sizes, URLs, notes, checklist items, timer state, image paths, opacity, and content scale. Use the editable layout selector with `LOAD`, `SAVE`, `COPY`, and `DEL`.
+A layout stores dock geometry, panel types, desktop coordinates, sizes, URLs, notes, checklist items, timer state, image paths, opacity, and content scale. Choose a layout from the selector to switch to it. Changes save automatically, including whether the dock is collapsed. **More > Save layout as** creates and opens a named copy without replacing an existing layout; **Duplicate layout** keeps you in the current layout. **Delete layout** asks for a second click to confirm. `Ctrl+S` saves the current layout immediately.
 
 ### Quick layouts
 
@@ -142,7 +143,7 @@ which matters because clicking the dock means taking focus off a fullscreen appl
 
 A digit another program already owns is reported in the status strip on the next launch rather
 than failing quietly, so it can be reassigned. Loading a layout this way pauses automatic
-switching until you move to a different application, exactly as the `LOAD` button does.
+switching until you move to a different application, exactly as choosing a layout in the dock does.
 
 ### Start with Windows
 
@@ -183,7 +184,9 @@ Matching uses only the foreground window's process name and title, which Windows
 
 ### Recovery and crash logs
 
-DriftDeck writes the current layout within about 650 ms of every change, so an interrupted session loses nothing. If a run ends without quitting — most often because the game it was sitting over was killed with it — the next launch says so in the status strip and keeps a report in `%LOCALAPPDATA%\DriftDeck\logs`. `SETTINGS` has a button to open that folder. Logs are capped at 1 MB per file and the newest fourteen files are kept, so a repeated fault cannot fill the disk. Nothing is sent anywhere.
+DriftDeck schedules a save about 650 ms after the last change and waits for the final save before a normal exit. A forced termination can still lose edits since the last completed save. The dock reports unsaved changes when a write fails, and quitting or switching layouts stops so those changes remain available. If a run ends without quitting — most often because the game it was sitting over was killed with it — the next launch says so in the status strip and keeps a report in `%LOCALAPPDATA%\DriftDeck\logs`. `SETTINGS` has a button to open that folder. Logs are capped at 1 MB per file and the newest fourteen files are kept, so a repeated fault cannot fill the disk. Nothing is sent anywhere.
+
+Settings and layouts retain a `.bak` copy of the previous successful save. If the main file cannot be read, DriftDeck tries that backup and reports recovery. Unreadable originals are preserved when replaced, rather than silently discarded.
 
 ### Themes
 
@@ -220,7 +223,7 @@ without restarting; **Turn off** goes back to the built-in look and leaves the f
 
 DriftDeck can ask GitHub for the latest published release when it starts, and says so in the status strip and the tray if a newer one exists. The request is anonymous and carries nothing about you or the applications you run; turn it off under `SETTINGS`. Nothing downloads until you choose **Update and restart** in `SETTINGS`, which fetches the update, closes DriftDeck the normal way so your layout is saved, installs it, and starts the new version. DriftDeck never restarts on its own.
 
-Layouts and settings are stored under `%LOCALAPPDATA%\DriftDeck`. Browser panels share one WebView2 profile under `%LOCALAPPDATA%\DriftDeck\webview2`, so a sign-in in one panel is available in the next and several panels cost far less memory than one browser process each. WebView2 manages those cookies and credentials itself; DriftDeck does not write them into layout JSON files.
+Layouts and settings are stored under `%LOCALAPPDATA%\DriftDeck`. Browser panels share one WebView2 profile under `%LOCALAPPDATA%\DriftDeck\webview2`, so a sign-in in one panel is available in the next and several panels cost far less memory than one browser process each. WebView2 manages those cookies and credentials itself; DriftDeck does not write them into layout JSON files. Its password-save prompt is enabled. Sign-in links that open a new window keep their connection to the original page, and normal exit gives the browser time to finish writing its profile. Websites still control session expiration; DriftDeck does not share your regular browser's profile.
 
 ## Compatibility and limitations
 

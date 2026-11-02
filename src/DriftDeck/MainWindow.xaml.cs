@@ -14,8 +14,8 @@ namespace DriftDeck;
 
 public partial class MainWindow : Window
 {
-    private const double DockHeight = 146;
-    private const double DockMinWidth = 860;
+    private const double DockHeight = 104;
+    private const double DockMinWidth = 600;
     private const double CollapsedWidth = 340;
     private const double CollapsedHeight = 30;
 
@@ -49,11 +49,15 @@ public partial class MainWindow : Window
     private bool _dockCollapsed;
     private bool _deleteArmed;
     private bool _shuttingDown;
+    private bool _closeReady;
+    private bool _switchingLayout;
+    private bool _refreshingLayouts;
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
     private PanelHost? _activeHost;
     private bool _muteAll;
     private double _expandedDockLeft;
     private double _expandedDockTop;
-    private double _expandedDockWidth = 900;
+    private double _expandedDockWidth = 640;
 
     /// <summary>Rule waiting out the settle delay before its layout is loaded.</summary>
     private LayoutRule? _pendingRule;
@@ -85,7 +89,7 @@ public partial class MainWindow : Window
         AddTimerCommand = new RelayCommand(() => AddPanel(PanelKind.Timer));
         AddImageCommand = new RelayCommand(() => AddPanel(PanelKind.ImagePin));
         ReopenPanelCommand = new RelayCommand(ReopenLastClosedPanel, () => _closedPanels.Count > 0);
-        SaveLayoutCommand = new RelayCommand(() => _ = SaveNamedLayoutAsync());
+        SaveLayoutCommand = new RelayCommand(() => _ = SaveCurrentLayoutAsync(true));
         MuteAllCommand = new RelayCommand(ToggleMuteAll);
 
         // Registered here rather than in XAML: InputBindings sit outside the visual tree,
@@ -215,6 +219,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _layout = await _layoutStore.LoadLastAsync();
+        var restoreWarning = _layoutStore.LoadWarning ?? _settingsStore.LoadWarning;
         ApplyWindowLayout(_layout);
         RefreshLayoutNames();
         LayoutComboBox.Text = _layout.Name;
@@ -235,7 +240,9 @@ public partial class MainWindow : Window
         ReportThemeProblems();
         ReportPreviousCrash();
         _ = CheckForUpdatesAsync();
-        _ = SweepPastedImagesAsync();
+        // Do not prune files when a damaged layout may still reference them.
+        if (restoreWarning is null) _ = SweepPastedImagesAsync();
+        else SetStatus(restoreWarning, StatusKind.Warning);
 
         if (_settings.StartHidden)
         {
@@ -264,12 +271,13 @@ public partial class MainWindow : Window
                 var layout = name.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase)
                     ? _layout
                     : await _layoutStore.LoadAsync(name);
+                if (_layoutStore.LoadWarning is not null) return;
                 referenced.AddRange(layout.Panels.Select(panel => panel.ImagePath));
             }
 
             await Task.Run(() => _imageStore.RemoveUnreferenced(referenced));
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // Housekeeping. A failed sweep costs disk space, never correctness.
         }
@@ -288,12 +296,12 @@ public partial class MainWindow : Window
         if (completed)
         {
             _settings.AutoSwitchLayouts = tour.EnableAutoSwitch;
-            if (tour.CreateBrowserPanel)
+            if (tour.CreateBrowserPanel && !_panelHosts.Any(host => host.Definition.Kind == PanelKind.Browser))
             {
                 AddPanel(PanelKind.Browser);
             }
 
-            if (tour.CreateNotesPanel)
+            if (tour.CreateNotesPanel && !_panelHosts.Any(host => host.Definition.Kind == PanelKind.Notes))
             {
                 AddPanel(PanelKind.Notes);
             }
@@ -303,7 +311,7 @@ public partial class MainWindow : Window
         {
             await _settingsStore.SaveAsync(_settings);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The tour would simply run once more. Not worth an error message on first launch.
         }
@@ -353,7 +361,7 @@ public partial class MainWindow : Window
         }
 
         var update = await new UpdateService().CheckAsync();
-        if (update is null || update.Tag == _settings.DismissedUpdateTag)
+        if (_shuttingDown || update is null || update.Tag == _settings.DismissedUpdateTag)
         {
             return;
         }
@@ -363,7 +371,7 @@ public partial class MainWindow : Window
         {
             await _settingsStore.SaveAsync(_settings);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // Worst case the same version is announced again next launch.
         }
@@ -443,7 +451,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        await SwitchLayoutAsync(target);
+        if (!await SwitchLayoutAsync(target)) return;
         SetStatus($"Loaded '{_layout.Name}' for {app.ProcessName} - {_panelHosts.Count} panels", StatusKind.Success);
     }
 
@@ -461,6 +469,7 @@ public partial class MainWindow : Window
         ClampDockIntoView();
         OverlayTransparencySlider.Value = Math.Round((1 - Math.Clamp(layout.Opacity, 0.35, 1)) * 100);
         TransparencyValueText.Text = $"{OverlayTransparencySlider.Value:0}%";
+        if (layout.IsDockCollapsed) CollapseDock(animate: false);
     }
 
     private void ClampDockIntoView()
@@ -541,7 +550,7 @@ public partial class MainWindow : Window
         panelWindow.SetClickThrough(_clickThrough);
 
         // A panel created while everything else is muted joins that state instead of blaring.
-        if (_muteAll && definition.Kind == PanelKind.Browser)
+        if (activate && _muteAll && definition.Kind == PanelKind.Browser)
         {
             host.SetMuted(true, notify: false);
         }
@@ -672,6 +681,7 @@ public partial class MainWindow : Window
 
     private void ReopenLastClosedPanel()
     {
+        if (_shuttingDown || _switchingLayout) return;
         if (_closedPanels.Count == 0)
         {
             SetStatus("No recently closed panel to reopen", StatusKind.Warning);
@@ -689,6 +699,7 @@ public partial class MainWindow : Window
 
     private void AddPanel(PanelKind kind)
     {
+        if (_shuttingDown || _switchingLayout) return;
         // Cascade below the dock so a new panel never lands exactly on top of the last one.
         var offset = (_panelHosts.Count % 6) * 28;
         var x = Left + offset;
@@ -1044,8 +1055,7 @@ public partial class MainWindow : Window
         var browsers = _panelHosts.Where(host => host.Definition.Kind == PanelKind.Browser).ToList();
         var allMuted = browsers.Count > 0 && browsers.All(host => host.Definition.IsMuted);
         _muteAll = allMuted;
-        MuteAllButton.Content = allMuted ? "\uE74F" : "\uE767";
-        MuteAllButton.SetResourceReference(ForegroundProperty, allMuted ? "WarnBrush" : "MutedBrush");
+        MuteAllButton.Header = allMuted ? "Unmute all browsers" : "Mute all browsers";
         MuteAllButton.ToolTip = allMuted
             ? "Unmute every browser panel (Ctrl+Shift+A)"
             : "Mute every browser panel (Ctrl+Shift+A)";
@@ -1110,7 +1120,7 @@ public partial class MainWindow : Window
         _autoSwitchTimer.Stop();
         _pendingRule = null;
 
-        await SwitchLayoutAsync(target);
+        if (!await SwitchLayoutAsync(target)) return;
         SetStatus($"Ctrl+Alt+{slot} · loaded ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
     }
 
@@ -1148,8 +1158,16 @@ public partial class MainWindow : Window
 
     // ============================ Modes ============================
 
+    private void CloseDockMenus()
+    {
+        AddPanelMenu.IsOpen = false;
+        MoreMenu.IsOpen = false;
+        LayoutComboBox.IsDropDownOpen = false;
+    }
+
     private void ToggleInteraction()
     {
+        CloseDockMenus();
         if (!IsVisible)
         {
             SetOverlayVisible(true);
@@ -1189,6 +1207,7 @@ public partial class MainWindow : Window
     {
         if (!visible)
         {
+            CloseDockMenus();
             foreach (var panelWindow in _panelWindows)
             {
                 panelWindow.Hide();
@@ -1268,6 +1287,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        SaveStateText.Text = "Saving changes";
         _saveTimer.Stop();
         _saveTimer.Start();
     }
@@ -1278,22 +1298,31 @@ public partial class MainWindow : Window
         await SaveCurrentLayoutAsync(false);
     }
 
-    private async Task SaveCurrentLayoutAsync(bool showStatus)
+    private async Task<bool> SaveCurrentLayoutAsync(bool showStatus)
     {
-        CaptureLayout();
+        await _saveGate.WaitAsync();
         try
         {
+            CaptureLayout();
             await _layoutStore.SaveAsync(_layout);
+            SaveStateText.Text = _saveTimer.IsEnabled ? "Saving changes" : "All changes saved";
             RefreshLayoutNames();
             if (showStatus)
             {
                 SetStatus($"Saved layout ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
             }
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            SetStatus($"Layout could not be saved: {exception.Message}", StatusKind.Warning);
+            SaveStateText.Text = "Changes not saved";
+            SetStatus($"Changes are not saved: {exception.Message}", StatusKind.Warning);
+            return false;
         }
+        finally
+        {
+            _saveGate.Release();
+        }
+        return true;
     }
 
     private void CaptureLayout()
@@ -1306,6 +1335,13 @@ public partial class MainWindow : Window
             _layout.Height = DockHeight;
         }
 
+        if (_dockCollapsed)
+        {
+            _layout.Left = _expandedDockLeft;
+            _layout.Top = _expandedDockTop;
+            _layout.Width = _expandedDockWidth;
+        }
+        _layout.IsDockCollapsed = _dockCollapsed;
         _layout.Opacity = GlobalOpacityFactor;
         foreach (var host in _panelHosts)
         {
@@ -1315,77 +1351,96 @@ public partial class MainWindow : Window
 
     private void RefreshLayoutNames()
     {
-        var currentText = LayoutComboBox.Text;
-        LayoutComboBox.ItemsSource = _layoutStore.ListNames();
-        LayoutComboBox.Text = string.IsNullOrWhiteSpace(currentText) ? _layout.Name : currentText;
+        _refreshingLayouts = true;
+        try
+        {
+            var currentText = LayoutComboBox.Text;
+            LayoutComboBox.ItemsSource = _layoutStore.ListNames();
+            LayoutComboBox.Text = string.IsNullOrWhiteSpace(currentText) ? _layout.Name : currentText;
+        }
+        finally { _refreshingLayouts = false; }
     }
 
-    private async void LoadLayoutButton_OnClick(object sender, RoutedEventArgs e)
+    private async void LayoutComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var requested = LayoutStore.NormalizeName(LayoutComboBox.Text);
-        if (requested.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            SetStatus($"‘{requested}’ is already loaded", StatusKind.Info);
-            return;
-        }
-
-        // Loading by hand outranks the rules: automatic switching is paused for this
-        // application until the user moves to a different one.
+        if (_initializing || _refreshingLayouts || _shuttingDown || _switchingLayout ||
+            LayoutComboBox.SelectedItem is not string name || name == _layout.Name) return;
         _manualOverrideProcess = _foreground.Current().ProcessName;
         _autoSwitchTimer.Stop();
         _pendingRule = null;
-
-        await SwitchLayoutAsync(requested);
-        SetStatus($"Loaded ‘{_layout.Name}’ · {_panelHosts.Count} panels", StatusKind.Success);
+        if (await SwitchLayoutAsync(name)) SetStatus(IdleStatus(), StatusKind.Info);
     }
 
     /// <summary>
     /// Replaces the live panels with a stored layout, saving the current one first. Shared by the
     /// Load button and by rule-driven switching so both paths behave identically.
     /// </summary>
-    private async Task SwitchLayoutAsync(string name)
+    private async Task<bool> SwitchLayoutAsync(string name)
     {
-        await SaveCurrentLayoutAsync(false);
-        _initializing = true;
-        _layout = await _layoutStore.LoadAsync(name);
-        ApplyWindowLayout(_layout);
-        LayoutComboBox.Text = _layout.Name;
-        LoadPanelHosts();
-        _closedPanels.Clear();
-        ReopenButton.IsEnabled = false;
-        _initializing = false;
-
-        // Records which layout is now current. Without this the "last layout" pointer still
-        // names the one we just left, and the next launch would restore the wrong workspace.
-        await SaveCurrentLayoutAsync(false);
+        if (_switchingLayout || _shuttingDown) return false;
+        _switchingLayout = true;
+        _saveTimer.Stop();
+        DockToolbar.IsEnabled = false;
+        foreach (var host in _panelHosts) host.IsEnabled = false;
+        try
+        {
+            if (!await SaveCurrentLayoutAsync(false))
+            {
+                _refreshingLayouts = true;
+                LayoutComboBox.Text = _layout.Name;
+                _refreshingLayouts = false;
+                return false;
+            }
+            _initializing = true;
+            if (_dockCollapsed) RestoreDock(animate: false);
+            _layout = await _layoutStore.LoadAsync(name);
+            ApplyWindowLayout(_layout);
+            LayoutComboBox.Text = _layout.Name;
+            LoadPanelHosts();
+            _closedPanels.Clear();
+            ReopenButton.IsEnabled = false;
+            _initializing = false;
+            if (!await SaveCurrentLayoutAsync(false)) return false;
+            if (_layoutStore.LoadWarning is { } warning)
+            {
+                SetStatus(warning, StatusKind.Warning);
+                return false;
+            }
+            return true;
+        }
+        finally
+        {
+            _initializing = false;
+            _switchingLayout = false;
+            DockToolbar.IsEnabled = true;
+            foreach (var host in _panelHosts) host.IsEnabled = true;
+        }
     }
 
     private void SaveLayoutButton_OnClick(object sender, RoutedEventArgs e) => _ = SaveNamedLayoutAsync();
 
     private async Task SaveNamedLayoutAsync()
     {
-        var name = LayoutStore.NormalizeName(LayoutComboBox.Text);
-        var renaming = !name.Equals(_layout.Name, StringComparison.OrdinalIgnoreCase);
-        _layout.Name = name;
-        LayoutComboBox.Text = name;
-        await SaveCurrentLayoutAsync(false);
-        SetStatus(renaming
-                ? $"Saved as new layout ‘{name}’"
-                : $"Saved layout ‘{name}’ · {_panelHosts.Count} panels",
-            StatusKind.Success);
+        if (_shuttingDown || _switchingLayout) return;
+        var dialog = new LayoutNameWindow(_layout.Name, _layoutStore) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (!await SaveCurrentLayoutAsync(false)) return;
+        try
+        {
+            await _layoutStore.SaveCopyAsync(_layout, dialog.LayoutName);
+            if (await SwitchLayoutAsync(dialog.LayoutName))
+                SetStatus($"Now using ‘{_layout.Name}’", StatusKind.Success);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            SetStatus($"The new layout could not be saved: {exception.Message}", StatusKind.Warning);
+        }
     }
 
     private async void CopyLayoutButton_OnClick(object sender, RoutedEventArgs e)
     {
-        await SaveCurrentLayoutAsync(false);
-        var existingNames = _layoutStore.ListNames();
-        var baseName = $"{_layout.Name} Copy";
-        var copyName = baseName;
-        var suffix = 2;
-        while (existingNames.Contains(copyName, StringComparer.OrdinalIgnoreCase))
-        {
-            copyName = $"{baseName} {suffix++}";
-        }
+        if (_shuttingDown || _switchingLayout || !await SaveCurrentLayoutAsync(false)) return;
+        var copyName = _layoutStore.SuggestCopyName(_layout.Name);
 
         try
         {
@@ -1395,7 +1450,7 @@ public partial class MainWindow : Window
             LayoutComboBox.Text = _layout.Name;
             SetStatus($"Copied to ‘{copyName}’ · still editing ‘{_layout.Name}’", StatusKind.Success);
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             SetStatus($"Copy failed: {exception.Message}", StatusKind.Warning);
         }
@@ -1407,6 +1462,7 @@ public partial class MainWindow : Window
     /// </summary>
     private async void DeleteLayoutButton_OnClick(object sender, RoutedEventArgs e)
     {
+        if (_shuttingDown || _switchingLayout) return;
         var name = LayoutStore.NormalizeName(LayoutComboBox.Text);
         if (name.Equals("Default", StringComparison.OrdinalIgnoreCase))
         {
@@ -1425,28 +1481,20 @@ public partial class MainWindow : Window
             _deleteArmed = true;
             _deleteArmTimer.Stop();
             _deleteArmTimer.Start();
-            DeleteButton.Content = "Confirm";
+            DeleteButton.Header = "Confirm delete";
             DeleteButton.SetResourceReference(BorderBrushProperty, "DangerBrush");
             SetStatus($"Click Confirm to delete ‘{name}’ · cancels in 4 seconds", StatusKind.Warning);
             return;
         }
 
         DisarmDelete();
+        if (_layout.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
+            !await SwitchLayoutAsync("Default")) return;
         if (!_layoutStore.Delete(name))
         {
             SetStatus($"‘{name}’ could not be deleted", StatusKind.Warning);
             return;
         }
-
-        if (_layout.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-        {
-            _initializing = true;
-            _layout = await _layoutStore.LoadAsync("Default");
-            ApplyWindowLayout(_layout);
-            LoadPanelHosts();
-            _initializing = false;
-        }
-
         RefreshLayoutNames();
         LayoutComboBox.Text = _layout.Name;
         SetStatus($"Deleted layout ‘{name}’", StatusKind.Success);
@@ -1461,7 +1509,7 @@ public partial class MainWindow : Window
         }
 
         _deleteArmed = false;
-        DeleteButton.Content = "Delete";
+        DeleteButton.Header = "Delete layout";
         DeleteButton.ClearValue(BorderBrushProperty);
     }
 
@@ -1530,8 +1578,19 @@ public partial class MainWindow : Window
                 _hotkeys = null;
             }
 
-            SetStatus($"Windows rejected those shortcuts, so the previous ones were kept: {exception.Message}",
+            ApplyIdleDimSetting();
+            ApplyFullscreenWarningSetting();
+            SetStatus($"Settings could not be applied or saved; your previous settings were kept: {exception.Message}",
                 StatusKind.Warning);
+        }
+    }
+
+    private void MenuButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
         }
     }
 
@@ -1605,16 +1664,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CollapseDock()
+    private void CollapseDock(bool animate = true)
     {
         DisarmDelete();
         _expandedDockLeft = Left;
         _expandedDockTop = Top;
-        _expandedDockWidth = ActualWidth;
-        _dockCollapsed = true;
-
-        FadeDock(() =>
+        _expandedDockWidth = Width;
+        void Change()
         {
+            _dockCollapsed = true;
             DockToolbar.Visibility = Visibility.Collapsed;
             StatusRow.Height = new GridLength(0);
             CollapseButton.Content = "\uE922"; // restore glyph
@@ -1627,14 +1685,17 @@ public partial class MainWindow : Window
             var workArea = MonitorHelper.WorkAreaForWindow(this);
             Left = workArea.Right - Width - 12;
             Top = workArea.Bottom - Height - 8;
-        });
+            ScheduleSave();
+        }
+        if (animate) FadeDock(Change);
+        else Change();
     }
 
-    private void RestoreDock()
+    private void RestoreDock(bool animate = true)
     {
-        _dockCollapsed = false;
-        FadeDock(() =>
+        void Change()
         {
+            _dockCollapsed = false;
             MinWidth = DockMinWidth;
             MaxHeight = DockHeight;
             Width = Math.Max(DockMinWidth, _expandedDockWidth);
@@ -1648,7 +1709,10 @@ public partial class MainWindow : Window
             ClampDockIntoView();
             Activate();
             SetStatus(IdleStatus(), StatusKind.Info);
-        });
+            ScheduleSave();
+        }
+        if (animate) FadeDock(Change);
+        else Change();
     }
 
     /// <summary>
@@ -1663,20 +1727,34 @@ public partial class MainWindow : Window
 
     private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (_closeReady) return;
+        // WPF does not await async event handlers. Keep the dispatcher alive until storage
+        // and browser disposal finish, including a second close request during that wait.
+        e.Cancel = true;
+        if (_shuttingDown || _switchingLayout) return;
         _shuttingDown = true;
+        CloseDockMenus();
         _saveTimer.Stop();
+        DockRoot.IsEnabled = false;
+        foreach (var host in _panelHosts) host.IsEnabled = false;
+        if (!await SaveCurrentLayoutAsync(false))
+        {
+            _shuttingDown = false;
+            DockRoot.IsEnabled = true;
+            foreach (var host in _panelHosts) host.IsEnabled = true;
+            return;
+        }
+
         _deleteArmTimer.Stop();
         _autoSwitchTimer.Stop();
         _idleTimer.Stop();
         _foreground.Dispose();
         _displays.Dispose();
         _fullscreen.Dispose();
-        await SaveCurrentLayoutAsync(false);
-
-        foreach (var host in _panelHosts)
+        await BrowserEnvironment.CloseAsync(() =>
         {
-            host.Dispose();
-        }
+            foreach (var host in _panelHosts) host.Dispose();
+        });
 
         foreach (var panelWindow in _panelWindows)
         {
@@ -1688,6 +1766,7 @@ public partial class MainWindow : Window
         _hotkeys?.Dispose();
         _overlayWindow?.Dispose();
         _activationSource?.RemoveHook(ActivationWindowProcedure);
+        _closeReady = true;
+        _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 }
-

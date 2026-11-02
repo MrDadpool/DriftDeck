@@ -6,9 +6,10 @@ public sealed class OverlayLayout
     public string Name { get; set; } = "Default";
     public double Left { get; set; } = 80;
     public double Top { get; set; } = 80;
-    public double Width { get; set; } = 900;
-    public double Height { get; set; } = 146;
+    public double Width { get; set; } = 640;
+    public double Height { get; set; } = 104;
     public double Opacity { get; set; } = 0.98;
+    public bool IsDockCollapsed { get; set; }
     public List<PanelDefinition> Panels { get; set; } = [];
 
     /// <summary>

@@ -212,8 +212,12 @@ public partial class PanelHost : UserControl, IDisposable
         Loaded -= BrowserPanel_OnLoaded;
         try
         {
-            await Browser.EnsureCoreWebView2Async(await BrowserEnvironment.GetAsync());
+            var environment = await BrowserEnvironment.GetAsync();
+            if (_disposed) return;
+            await Browser.EnsureCoreWebView2Async(environment);
+            if (_disposed) return;
             var core = Browser.CoreWebView2;
+            core.Profile.IsPasswordAutosaveEnabled = true;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = true;
             core.Settings.IsSwipeNavigationEnabled = false;
@@ -224,7 +228,7 @@ public partial class PanelHost : UserControl, IDisposable
             core.NavigationCompleted += Core_OnNavigationCompleted;
             core.SourceChanged += (_, _) => SyncAddressFromBrowser();
             core.DocumentTitleChanged += Core_OnDocumentTitleChanged;
-            // Keep pop-ups inside the panel: a bare WebView2 window has no chrome and cannot be closed.
+            // Provider sign-ins need a real child window to communicate with their opener.
             core.NewWindowRequested += Core_OnNewWindowRequested;
 
             // Applied before the first navigation, so a muted panel never gets to make a sound.
@@ -235,6 +239,7 @@ public partial class PanelHost : UserControl, IDisposable
         }
         catch (Exception exception)
         {
+            if (_disposed) return;
             Browser.Visibility = Visibility.Collapsed;
             BrowserErrorRetry.Visibility = Visibility.Collapsed;
             ShowBrowserError(
@@ -304,10 +309,16 @@ public partial class PanelHost : UserControl, IDisposable
         SyncWindowTitle();
     }
 
-    private void Core_OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+    private async void Core_OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
-        e.Handled = true;
-        Navigate(e.Uri);
+        if (Window.GetWindow(this) is not { } owner) { e.Handled = true; return; }
+        try { await BrowserPopupWindow.OpenAsync(owner, e); }
+        catch (Exception exception)
+        {
+            App.Sentinel?.WriteCrashReport(exception, "Browser popup");
+            if (!_disposed) StatusRequested?.Invoke(this, new PanelStatusEventArgs(
+                "The browser window could not open. Try the link again.", true));
+        }
     }
 
     private static string DescribeWebError(CoreWebView2WebErrorStatus status) => status switch
@@ -341,16 +352,14 @@ public partial class PanelHost : UserControl, IDisposable
     private void SyncAddressFromBrowser()
     {
         var source = Browser.CoreWebView2?.Source;
-        if (string.IsNullOrEmpty(source) || AddressBox.IsKeyboardFocusWithin)
-        {
-            return;
-        }
+        if (string.IsNullOrEmpty(source)) return;
+        Definition.Url = source;
+        PanelChanged?.Invoke(this, EventArgs.Empty);
+        if (AddressBox.IsKeyboardFocusWithin) return;
 
         _suppressAddressUpdate = true;
         AddressBox.Text = source;
         _suppressAddressUpdate = false;
-        Definition.Url = source;
-        PanelChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Navigate(string input)
@@ -822,10 +831,6 @@ public partial class PanelHost : UserControl, IDisposable
         Definition.TimerDurationSeconds = _timer.DurationSeconds;
         Definition.TimerRemainingSeconds = _timer.RemainingSeconds;
         Definition.TimerEndUtc = _timer.EndUtc;
-        if (Definition.Kind == PanelKind.Browser)
-        {
-            Definition.Url = AddressBox.Text;
-        }
     }
 
     public Rect GetBounds() =>
@@ -1571,6 +1576,7 @@ public partial class PanelHost : UserControl, IDisposable
         }
 
         _disposed = true;
+        if (Window.GetWindow(this) is { } owner) BrowserPopupWindow.CloseOwned(owner);
         StopTimerTicking();
         Browser.Dispose();
     }
